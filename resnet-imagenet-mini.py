@@ -34,6 +34,12 @@ transform = transforms.Compose([
     transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
 ])
 
+# Initialize pytorch profiler
+prof = torch.profiler.profile(
+    schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+    on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/mnist'))
+
+
 # https://discuss.pytorch.org/t/questions-about-dataloader-and-dataset/806/4
 def my_collate(batch):
     batch = filter (lambda x:x is not None, batch)
@@ -71,6 +77,7 @@ optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 start_time = time.perf_counter()
 # Train the model...
+prof.start()
 for epoch in range(num_epochs):
     batch_start = time.perf_counter()
     for inputs, labels in train_loader:
@@ -96,11 +103,13 @@ for epoch in range(num_epochs):
 
     # Print the loss for every epoch
     print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f} at the timestamp {time.perf_counter()}')
+    prof.step()
 
 print(f'Finished Training, Loss: {loss.item():.4f}')
 
 end_time = time.perf_counter()
 print(f"Training time in {end_time - start_time:0.4f} seconds")
 
+prof.stop()
 torch.save(model.state_dict(), "resnet-imagenet-model.pth")
 print("Saved PyTorch Model State to resnet-imagenet-model.pth")
