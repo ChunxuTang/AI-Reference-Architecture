@@ -1,3 +1,11 @@
+"""
+A script to benchmark data loading of the ImageNet dataset in the PyTorch
+data loader. Note that it still requires some CPU data processing to convert
+the images to PyTorch tensors.
+
+Example usage:
+python3 benchmark-data-loading.py -p /mnt/alluxio/fuse/imagenet-mini/train -e 5 -b 128 -w 16
+"""
 import argparse
 import logging
 import time
@@ -102,7 +110,9 @@ class BenchmarkRunner:
         self._logger.debug(f"Using {device}")
 
     def _summarize(self, elapsed_time):
-        self._logger.info(f"[Summary] experiment: {self.name} | path: {self.path}")
+        self._logger.info(
+            f"[Summary] experiment: {self.name} | path: {self.path}"
+        )
         self._logger.info(
             f"num_epochs: {self.num_epochs} | batch_size: {self.batch_size} | "
             f"num_workers: {self.num_workers} | time: {elapsed_time:0.4f}"
