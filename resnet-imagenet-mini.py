@@ -1,4 +1,6 @@
 # https://moiseevigor.github.io/software/2022/12/18/one-pager-training-resnet-on-imagenet/
+import argparse
+
 import torch
 import torchvision
 import torchvision.transforms as transforms
@@ -6,6 +8,23 @@ import time
 from torch.utils.data.dataloader import default_collate
 
 print(f"Start time: {time.perf_counter()}")
+
+def get_args():
+    parser = argparse.ArgumentParser(
+        description="Resnet Imagenet Mini"
+    )
+
+    parser.add_argument(
+        "-p",
+        "--profile",
+        help="Profiling the Resnet Imagenet training",
+        default=true,
+        type=bool
+    )
+    
+    return parser.parse_args()
+
+args = get_args()
 
 # Set device
 device = (
@@ -70,6 +89,14 @@ criterion = torch.nn.CrossEntropyLoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
 start_time = time.perf_counter()
+
+prof = None
+if args.profile:
+    prof = torch.profiler.profile(
+        schedule=torch.profiler.schedule(wait=0, warmup=0, active=1, repeat=1),
+        on_trace_ready=torch.profiler.tensorboard_trace_handler('./log/mnist'))
+    prof.start()
+
 # Train the model...
 for epoch in range(num_epochs):
     batch_start = time.perf_counter()
@@ -96,11 +123,16 @@ for epoch in range(num_epochs):
 
     # Print the loss for every epoch
     print(f'Epoch {epoch+1}/{num_epochs}, Loss: {loss.item():.4f} at the timestamp {time.perf_counter()}')
+    if args.profile:
+        prof.step()
 
 print(f'Finished Training, Loss: {loss.item():.4f}')
 
 end_time = time.perf_counter()
 print(f"Training time in {end_time - start_time:0.4f} seconds")
+
+if args.profile:
+    prof.stop()
 
 torch.save(model.state_dict(), "resnet-imagenet-model.pth")
 print("Saved PyTorch Model State to resnet-imagenet-model.pth")
