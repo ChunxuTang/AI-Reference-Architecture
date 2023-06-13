@@ -18,7 +18,7 @@ def get_args():
         "-p",
         "--profile",
         help="Profiling the Resnet Imagenet training",
-        default=true,
+        default=False,
         type=bool
     )
     
