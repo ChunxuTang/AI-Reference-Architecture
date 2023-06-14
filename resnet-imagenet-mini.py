@@ -27,8 +27,7 @@ def get_args():
         "-p",
         "--profile",
         help="Profiling the Resnet Imagenet training",
-        default=False,
-        type=bool,
+        action="store_true",
     )
 
     parser.add_argument(
@@ -223,13 +222,14 @@ class ResnetTrainer:
 
 if __name__ == "__main__":
     args = get_args()
+    print(args.profile)
 
-    resnetTrainer = ResnetTrainer(
-        input_path=args.input_path,
-        output_path=args.output_path,
-        num_epochs=args.epoch,
-        batch_size=args.batch,
-        num_workers=args.worker,
-        profiler_enabled=args.profile,
-    )
-    resnetTrainer.run_trainer()
+    # resnetTrainer = ResnetTrainer(
+    #     input_path=args.input_path,
+    #     output_path=args.output_path,
+    #     num_epochs=args.epoch,
+    #     batch_size=args.batch,
+    #     num_workers=args.worker,
+    #     profiler_enabled=args.profile,
+    # )
+    # resnetTrainer.run_trainer()
