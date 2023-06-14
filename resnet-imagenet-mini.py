@@ -222,14 +222,13 @@ class ResnetTrainer:
 
 if __name__ == "__main__":
     args = get_args()
-    print(args.profile)
 
-    # resnetTrainer = ResnetTrainer(
-    #     input_path=args.input_path,
-    #     output_path=args.output_path,
-    #     num_epochs=args.epoch,
-    #     batch_size=args.batch,
-    #     num_workers=args.worker,
-    #     profiler_enabled=args.profile,
-    # )
-    # resnetTrainer.run_trainer()
+    resnetTrainer = ResnetTrainer(
+        input_path=args.input_path,
+        output_path=args.output_path,
+        num_epochs=args.epoch,
+        batch_size=args.batch,
+        num_workers=args.worker,
+        profiler_enabled=args.profile,
+    )
+    resnetTrainer.run_trainer()
