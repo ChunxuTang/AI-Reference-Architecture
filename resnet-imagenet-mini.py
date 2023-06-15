@@ -45,6 +45,13 @@ def get_args():
     )
 
     parser.add_argument(
+        "-l",
+        "--profiler_log_path",
+        help="Profiler log path",
+        default="./log/resnet",
+    )
+
+    parser.add_argument(
         "-e", "--epoch", help="Number of epochs", default=3, type=int
     )
     parser.add_argument(
@@ -226,6 +233,7 @@ if __name__ == "__main__":
     resnetTrainer = ResnetTrainer(
         input_path=args.input_path,
         output_path=args.output_path,
+        profiler_log_path=args.profiler_log_path,
         num_epochs=args.epoch,
         batch_size=args.batch,
         num_workers=args.worker,
