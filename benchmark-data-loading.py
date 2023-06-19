@@ -9,6 +9,7 @@ python3 benchmark-data-loading.py -p /mnt/alluxio/fuse/imagenet-mini/train -e 5 
 import argparse
 import logging
 import time
+import warnings
 from logging.config import fileConfig
 
 import torch
@@ -21,6 +22,7 @@ fileConfig(log_conf_path, disable_existing_loggers=True)
 # Explicitly disable the PIL.TiffImagePlugin logger as it also uses
 # the StreamHandler which will overrun the console output.
 logging.getLogger("PIL.TiffImagePlugin").disabled = True
+warnings.filterwarnings("ignore", category=UserWarning)
 
 
 def get_args():
