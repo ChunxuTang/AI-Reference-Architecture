@@ -3,6 +3,7 @@ import os
 import cv2
 import hashlib
 import requests
+import humanfriendly
 
 import numpy as np
 from PIL import Image
@@ -10,9 +11,10 @@ from torch.utils.data import Dataset
 
 
 class AlluxioDataset(Dataset):
-    def __init__(self, root, alluxio_rest, _logger):
-        self.root = root
+    def __init__(self, root, alluxio_rest, transform, _logger):
+        self.root = os.path.abspath(root)
         self.alluxio_rest = alluxio_rest
+        self.transform = transform
         self._logger = _logger
         self.data = []
         classes = [name for name in os.listdir(self.root) if os.path.isdir(os.path.join(self.root, name))]
@@ -32,24 +34,24 @@ class AlluxioDataset(Dataset):
         image_content = self.alluxio_rest.read_whole_file(image_path)
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
-            image = np.array(image)
         except Exception as e:
             self._logger.error(
                 f"Error when decoding image: {image_path}, error: {e}"
             )
             return None
 
-        image = cv2.resize(image,(224,224))
+        if self.transform is not None:
+            image = self.transform(image)
         
         class_id = self.class_to_index[class_name]
-
         return image, class_id
     
 
 # TODO support multiple workers
 class AlluxioRest:
-    def __init__(self, alluxio_workers, _logger):
+    def __init__(self, alluxio_workers, alluxio_page_size, _logger):
         self.alluxio_workers = [item.strip() for item in alluxio_workers.split(",")]
+        self.alluxio_page_size = humanfriendly.parse_size(alluxio_page_size)
         self._logger = _logger
     
     def read_whole_file(self, file_path):
@@ -61,9 +63,12 @@ class AlluxioRest:
             page_content = self.read_file(worker_address, file_id, page_index)
             if page_content is None or page_content == b"":
                 break
-
-            content += page_content
-            page_index += 1
+            elif len(page_content) < self.alluxio_page_size: # last page
+                content += page_content
+                break
+            else:
+                content += page_content
+                page_index += 1
 
         return content
         
