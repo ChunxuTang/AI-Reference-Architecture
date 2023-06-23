@@ -8,23 +8,24 @@ import humanfriendly
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 
 class AlluxioDataset(Dataset):
-    def __init__(self, root, alluxio_rest, transform, _logger):
-        self.root = os.path.abspath(root)
+    def __init__(self, local_path, alluxio_ufs_path, alluxio_rest, transform, _logger):
         self.alluxio_rest = alluxio_rest
         self.transform = transform
         self._logger = _logger
         self.data = []
-        classes = [name for name in os.listdir(self.root) if os.path.isdir(os.path.join(self.root, name))]
+        classes = [name for name in os.listdir(local_path) if os.path.isdir(os.path.join(local_path, name))]
         index_to_class = {i:j for i, j in enumerate(classes)}
         self.class_to_index = {value:key for key,value in index_to_class.items()}
         for class_name in classes:
-            class_path = os.path.join(self.root, class_name)
-            image_names = [name for name in os.listdir(class_path) if os.path.isfile(os.path.join(class_path, name))]
+            local_class_path = os.path.join(local_path, class_name)
+            image_names = [name for name in os.listdir(local_class_path) if os.path.isfile(os.path.join(local_class_path, name))]
             for image_name in image_names:
-                self.data.append([os.path.join(class_path, image_name), class_name])
+                self.data.append([alluxio_ufs_path.rstrip("/") + "/" + class_name + "/" + image_name, class_name])
 
     def __len__(self):
         return len(self.data)
@@ -49,11 +50,18 @@ class AlluxioDataset(Dataset):
 
 # TODO support multiple workers
 class AlluxioRest:
-    def __init__(self, alluxio_workers, alluxio_page_size, _logger):
-        self.alluxio_workers = [item.strip() for item in alluxio_workers.split(",")]
-        self.alluxio_page_size = humanfriendly.parse_size(alluxio_page_size)
+    def __init__(self, alluxio_workers, alluxio_page_size, concurrency, _logger):
+        self.workers = [item.strip() for item in alluxio_workers.split(",")]
+        self.page_size = humanfriendly.parse_size(alluxio_page_size)
         self._logger = _logger
-    
+        self.session = self.create_session(concurrency)
+
+    def create_session(self, concurrency):
+        session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=concurrency, pool_maxsize=concurrency)
+        session.mount('http://', adapter)
+        return session
+
     def read_whole_file(self, file_path):
         file_id = self.get_file_id(file_path)
         worker_address = self.get_worker_address(file_id)
@@ -63,7 +71,7 @@ class AlluxioRest:
             page_content = self.read_file(worker_address, file_id, page_index)
             if page_content is None or page_content == b"":
                 break
-            elif len(page_content) < self.alluxio_page_size: # last page
+            elif len(page_content) < self.page_size: # last page
                 content += page_content
                 break
             else:
@@ -81,7 +89,7 @@ class AlluxioRest:
         }
 
         try:
-            response = requests.get(url, params=params)
+            response = self.session.get(url, params=params)
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:
@@ -111,5 +119,5 @@ class AlluxioRest:
         return hex(hash(uri))[2:].lower()
     
     def get_worker_address(self, file_path):
-        return self.alluxio_workers[0]
+        return self.workers[0]
         
