@@ -8,6 +8,8 @@ import humanfriendly
 import numpy as np
 from PIL import Image
 from torch.utils.data import Dataset
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 
 class AlluxioDataset(Dataset):
@@ -48,11 +50,18 @@ class AlluxioDataset(Dataset):
 
 # TODO support multiple workers
 class AlluxioRest:
-    def __init__(self, alluxio_workers, alluxio_page_size, _logger):
-        self.alluxio_workers = [item.strip() for item in alluxio_workers.split(",")]
-        self.alluxio_page_size = humanfriendly.parse_size(alluxio_page_size)
+    def __init__(self, alluxio_workers, alluxio_page_size, concurrency, _logger):
+        self.workers = [item.strip() for item in alluxio_workers.split(",")]
+        self.page_size = humanfriendly.parse_size(alluxio_page_size)
         self._logger = _logger
-    
+        self.session = self.create_session(concurrency)
+
+    def create_session(self, concurrency):
+        session = requests.Session()
+        adapter = HTTPAdapter(pool_connections=concurrency, pool_maxsize=concurrency)
+        session.mount('http://', adapter)
+        return session
+
     def read_whole_file(self, file_path):
         file_id = self.get_file_id(file_path)
         worker_address = self.get_worker_address(file_id)
@@ -62,7 +71,7 @@ class AlluxioRest:
             page_content = self.read_file(worker_address, file_id, page_index)
             if page_content is None or page_content == b"":
                 break
-            elif len(page_content) < self.alluxio_page_size: # last page
+            elif len(page_content) < self.page_size: # last page
                 content += page_content
                 break
             else:
@@ -80,7 +89,7 @@ class AlluxioRest:
         }
 
         try:
-            response = requests.get(url, params=params)
+            response = self.session.get(url, params=params)
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:
@@ -110,5 +119,5 @@ class AlluxioRest:
         return hex(hash(uri))[2:].lower()
     
     def get_worker_address(self, file_path):
-        return self.alluxio_workers[0]
+        return self.workers[0]
         

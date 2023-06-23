@@ -112,7 +112,7 @@ class BenchmarkRunner:
         dataset = None
         if self.alluxio:
             self._logger.debug(f"Using alluxio dataset with workers {self.alluxio_workers}")
-            alluxio_rest = AlluxioRest(self.alluxio_workers, self.alluxio_page_size, self._logger)
+            alluxio_rest = AlluxioRest(self.alluxio_workers, self.alluxio_page_size, self.num_workers, self._logger)
             dataset = AlluxioDataset(local_path=self.path, alluxio_ufs_path=self.alluxio_ufs_path, alluxio_rest=alluxio_rest, transform=transform, _logger=self._logger)
         else:
             self._logger.debug("Using ImageFolder dataset")
