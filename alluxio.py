@@ -87,19 +87,22 @@ class AlluxioRest:
     def read_whole_file(self, file_path):
         file_id = self.get_file_id(file_path)
         worker_address = self.get_worker_address(file_id)
-        content = b""
         page_index = 0
-        while True:
-            page_content = self.read_file(worker_address, file_id, page_index)
-            if page_content is None or page_content == b"":
-                break
-            elif len(page_content) < self.page_size:  # last page
-                content += page_content
-                break
-            else:
-                content += page_content
+
+        def page_generator():
+            nonlocal page_index
+            while True:
+                page_content = self.read_file(
+                    worker_address, file_id, page_index
+                )
+                if not page_content:
+                    return
+                yield page_content
+                if len(page_content) < self.page_size:  # last page
+                    return
                 page_index += 1
 
+        content = b"".join(page_generator())
         return content
 
     def read_file(self, worker_address, file_id, page_index):
@@ -112,29 +115,23 @@ class AlluxioRest:
             return response.content
         except requests.exceptions.RequestException as e:
             self._logger.error(
-                f"Error when requesting image {file_id} page {page_index}: error {e}"
+                f"Error when requesting file {file_id} page {page_index}: error {e}"
             )
             return None
 
     def get_file_id(self, uri):
-        try:
-            sha256_hash = hashlib.sha256()
-            sha256_hash.update(uri.encode("utf-8"))
-            return sha256_hash.hexdigest().lower()
-        except hashlib.AlgorithmNotAvailable:
-            # Continue with other hash method
-            pass
-
-        try:
-            md5_hash = hashlib.md5()
-            md5_hash.update(uri.encode("utf-8"))
-            return md5_hash.hexdigest().lower()
-        except hashlib.AlgorithmNotAvailable:
-            # Continue with other hash method
-            pass
-
-        # Fallback to simple hashCode
-        return hex(hash(uri))[2:].lower()
+        hash_functions = [
+            hashlib.sha256,
+            hashlib.md5,
+            lambda x: hex(hash(x))[2:].lower(),  # Fallback to simple hashCode
+        ]
+        for hash_function in hash_functions:
+            try:
+                hash_obj = hash_function()
+                hash_obj.update(uri.encode("utf-8"))
+                return hash_obj.hexdigest().lower()
+            except AttributeError:
+                continue
 
     def get_worker_address(self, file_path):
         return self.workers[0]
