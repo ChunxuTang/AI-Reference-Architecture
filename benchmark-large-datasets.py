@@ -4,9 +4,9 @@ and Alluxio REST APIs.
 
 Example usage:
 1. To run the script to test a FUSE dataset:
-python3 benchmark_large_datasets.py -p /mnt/alluxio/fuse/yelp-review/yelp_academic_dataset_review.json
+python3 benchmark-large-datasets.py -p /mnt/alluxio/fuse/yelp-review/yelp_academic_dataset_review.json
 2. To run the script to test Alluxio GET page API
-python3 benchmark_large_datasets.py -a -aw localhost:28080
+python3 benchmark-large-datasets.py -a -aw localhost:28080
 """
 import argparse
 import logging
