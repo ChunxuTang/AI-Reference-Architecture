@@ -14,11 +14,10 @@ from logging.config import fileConfig
 
 import torch
 import torchvision.transforms as transforms
-from torch.utils.data import DataLoader
-from torchvision.datasets import ImageFolder
-
 from alluxio import AlluxioDataset
 from alluxio import AlluxioRest
+from torch.utils.data import DataLoader
+from torchvision.datasets import ImageFolder
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
@@ -55,8 +54,7 @@ def get_args():
         "-a",
         "--alluxio",
         help="Whether to load data from Alluxio, default will load data from the given path directly",
-        default=True,
-        type=bool
+        action="store_true",
     )
     parser.add_argument(
         "-ap",
@@ -68,13 +66,13 @@ def get_args():
         "-aw",
         "--alluxioworkers",
         help="Alluxio worker addresses in list of host:port,host2:port2 format",
-        default="localhost:28080"
+        default="localhost:28080",
     )
     parser.add_argument(
         "-ps",
         "--alluxiopagesize",
         help="Alluxio page size (e.g. 1MB, 4MB, 1024KB)",
-        default="1MB"
+        default="1MB",
     )
 
     return parser.parse_args()
@@ -83,7 +81,18 @@ def get_args():
 class BenchmarkRunner:
     _logger = logging.getLogger("BenchmarkRunner")
 
-    def __init__(self, path, name, num_epochs, batch_size, num_workers, alluxio, alluxio_ufs_path, alluxio_workers, alluxio_page_size):
+    def __init__(
+        self,
+        path,
+        name,
+        num_epochs,
+        batch_size,
+        num_workers,
+        alluxio,
+        alluxio_ufs_path,
+        alluxio_workers,
+        alluxio_page_size,
+    ):
         self.path = path
         self.name = name
         self.num_epochs = num_epochs
@@ -111,9 +120,22 @@ class BenchmarkRunner:
 
         dataset = None
         if self.alluxio:
-            self._logger.debug(f"Using alluxio dataset with workers {self.alluxio_workers}")
-            alluxio_rest = AlluxioRest(self.alluxio_workers, self.alluxio_page_size, self.num_workers, self._logger)
-            dataset = AlluxioDataset(local_path=self.path, alluxio_ufs_path=self.alluxio_ufs_path, alluxio_rest=alluxio_rest, transform=transform, _logger=self._logger)
+            self._logger.debug(
+                f"Using alluxio dataset with workers {self.alluxio_workers}"
+            )
+            alluxio_rest = AlluxioRest(
+                self.alluxio_workers,
+                self.alluxio_page_size,
+                self.num_workers,
+                self._logger,
+            )
+            dataset = AlluxioDataset(
+                local_path=self.path,
+                alluxio_ufs_path=self.alluxio_ufs_path,
+                alluxio_rest=alluxio_rest,
+                transform=transform,
+                _logger=self._logger,
+            )
         else:
             self._logger.debug("Using ImageFolder dataset")
             dataset = ImageFolder(root=self.path, transform=transform)
@@ -152,7 +174,7 @@ class BenchmarkRunner:
 
     def _summarize(self, elapsed_time):
         if self.alluxio:
-           self._logger.info(
+            self._logger.info(
                 f"[Summary] experiment: {self.name} | path: {self.alluxio_ufs_path}"
             )
         else:
@@ -177,6 +199,6 @@ if __name__ == "__main__":
         alluxio=args.alluxio,
         alluxio_ufs_path=args.alluxiopath,
         alluxio_workers=args.alluxioworkers,
-        alluxio_page_size=args.alluxiopagesize
+        alluxio_page_size=args.alluxiopagesize,
     )
     benchmark_runner.benchmark_data_loading()
