@@ -55,6 +55,7 @@ def get_args():
         default="1MB",
     )
 
+
     return parser.parse_args()
 
 
@@ -89,7 +90,7 @@ class BenchmarkLargeDatasetRunner:
                 1,  # Only using one thread
                 self._logger,
             )
-            alluxio_rest.read_whole_file(self.alluxio_ufs_path)
+            alluxio_rest.read_whole_file(self.alluxio_ufs_path, 5094)
         else:
             self._logger.debug("Using alluxio FUSE/local dataset")
             self._logger.info(f"Loading dataset from {self.path}")
