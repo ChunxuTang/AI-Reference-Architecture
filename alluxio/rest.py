@@ -44,7 +44,7 @@ class AlluxioRestDataset(Dataset):
 
     def __getitem__(self, index):
         image_path, class_name = self.data[index]
-        image_content = self.alluxio_rest.read_whole_file(image_path)
+        image_content = self.alluxio_rest.read_file(image_path)
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
         except Exception as e:
@@ -94,7 +94,7 @@ class AlluxioRest:
             )
             return None  
 
-    def read_whole_file(self, file_path):
+    def read_file(self, file_path):
         file_id = self.get_file_id(file_path)
         worker_address = self.get_worker_address()
         page_index = 0

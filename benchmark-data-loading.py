@@ -39,7 +39,6 @@ class APIType(Enum):
     REST = "rest"
     S3 = "s3"
 
-
 def get_args():
     parser = argparse.ArgumentParser(
         description="Benchmark PyTorch Data Loading on ImageNet Dataset"
