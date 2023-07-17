@@ -1,6 +1,7 @@
 import hashlib
 import io
 import os
+import json
 
 import humanfriendly
 import requests
@@ -9,36 +10,29 @@ from requests.adapters import HTTPAdapter
 from torch.utils.data import Dataset
 
 
-class AlluxioDataset(Dataset):
+class AlluxioRestDataset(Dataset):
     def __init__(
-        self, local_path, alluxio_ufs_path, alluxio_rest, transform, _logger
+        self, alluxio_rest, dataset_path, transform, _logger
     ):
         self.alluxio_rest = alluxio_rest
         self.transform = transform
         self._logger = _logger
         self.data = []
-        classes = [
-            name
-            for name in os.listdir(local_path)
-            if os.path.isdir(os.path.join(local_path, name))
-        ]
+        
+        classes = [item['mName'] for item in json.loads(self.alluxio_rest.list_dir(dataset_path)) if item['mType'] == 'directory']
         index_to_class = {i: j for i, j in enumerate(classes)}
+        
         self.class_to_index = {
             value: key for key, value in index_to_class.items()
         }
+
         for class_name in classes:
-            local_class_path = os.path.join(local_path, class_name)
-            image_names = [
-                name
-                for name in os.listdir(local_class_path)
-                if os.path.isfile(os.path.join(local_class_path, name))
-            ]
+            class_path = dataset_path.rstrip("/") + "/" + class_name
+            image_names = [item['mName'] for item in json.loads(self.alluxio_rest.list_dir(class_path)) if item['mType'] == 'file']
             for image_name in image_names:
                 self.data.append(
                     [
-                        alluxio_ufs_path.rstrip("/")
-                        + "/"
-                        + class_name
+                        class_path
                         + "/"
                         + image_name,
                         class_name,
@@ -69,10 +63,11 @@ class AlluxioDataset(Dataset):
 # TODO support multiple workers
 class AlluxioRest:
     def __init__(
-        self, alluxio_workers, alluxio_page_size, concurrency, _logger
+        self, endpoint, dora_root, page_size, concurrency, _logger
     ):
-        self.workers = [item.strip() for item in alluxio_workers.split(",")]
-        self.page_size = humanfriendly.parse_size(alluxio_page_size)
+        self.workers = [item.strip() for item in endpoint.split(",")]
+        self.dora_root = dora_root
+        self.page_size = humanfriendly.parse_size(page_size)
         self._logger = _logger
         self.session = self.create_session(concurrency)
 
@@ -84,15 +79,41 @@ class AlluxioRest:
         session.mount("http://", adapter)
         return session
 
+    def list_dir(self, path):
+        worker_address = self.get_worker_address()
+        url = f"http://{worker_address}/files"
+        rel_path = self.subtract_path(path, self.dora_root)
+        print(path) #s3://ref-arch/imagenet-mini/val
+        print(self.dora_root)  #s3://ref-arch/
+        print(rel_path) #imagenet-mini/val
+        params = {"path": "/imagenet-mini"} # tried /imagenet-mini/val, /imagenet-mini/val/, "imagenet-mini" same result
+        try:
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            return response.content
+        except requests.exceptions.RequestException as e:
+            self._logger.error(
+                f"Error when listing path {rel_path}: error {e}"
+            )
+            # ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+            # java.lang.NullPointerException: msg
+	# at io.netty.util.internal.ObjectUtil.checkNotNull(ObjectUtil.java:39)
+	# at io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:948)
+	# at io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:856)
+	# at io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:851)
+	# at alluxio.worker.http.HttpServerHandler.channelRead0(HttpServerHandler.java:97)
+	# at alluxio.worker.http.HttpServerHandler.channelRead0(HttpServerHandler.java:60)
+            return None  
+
     def read_whole_file(self, file_path):
         file_id = self.get_file_id(file_path)
-        worker_address = self.get_worker_address(file_id)
+        worker_address = self.get_worker_address()
         page_index = 0
 
         def page_generator():
             nonlocal page_index
             while True:
-                page_content = self.read_file(
+                page_content = self.read_page(
                     worker_address, file_id, page_index
                 )
                 if not page_content:
@@ -105,7 +126,7 @@ class AlluxioRest:
         content = b"".join(page_generator())
         return content
 
-    def read_file(self, worker_address, file_id, page_index):
+    def read_page(self, worker_address, file_id, page_index):
         url = f"http://{worker_address}/page"
         params = {"fileId": file_id, "pageIndex": page_index}
 
@@ -133,5 +154,14 @@ class AlluxioRest:
             except AttributeError:
                 continue
 
-    def get_worker_address(self, file_path):
+    def get_worker_address(self):
         return self.workers[0]
+    
+    def subtract_path(self, path, parent_path):
+        if '://' in path and '://' in parent_path:
+            # Remove the parent_path from path
+            relative_path = path[len(parent_path):]
+        else:
+            # Get the relative path for local paths
+            relative_path = os.path.relpath(path, start=parent_path)
+        return relative_path

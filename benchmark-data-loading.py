@@ -4,20 +4,28 @@ data loader. Note that it still requires some CPU data processing to convert
 the images to PyTorch tensors.
 
 Example usage:
-python3 benchmark-data-loading.py -p /mnt/alluxio/fuse/imagenet-mini/train -e 5 -b 128 -w 16
+POSIX API
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a posix -p /mnt/alluxio/fuse/imagenet-mini/val
+REST API
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a rest -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --endpoints localhost:28080 --pagesize 20MB
+S3 API
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a s3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --endpoints localhost:29998
 """
 import argparse
 import logging
 import time
 import warnings
+from enum import Enum
 from logging.config import fileConfig
 
 import torch
 import torchvision.transforms as transforms
-from alluxio import AlluxioDataset
-from alluxio import AlluxioRest
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
+
+from alluxio.rest import AlluxioRestDataset, AlluxioRest
+from alluxio.s3 import AlluxioS3Dataset, AlluxioS3
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
@@ -25,6 +33,11 @@ fileConfig(log_conf_path, disable_existing_loggers=True)
 # the StreamHandler which will overrun the console output.
 logging.getLogger("PIL.TiffImagePlugin").disabled = True
 warnings.filterwarnings("ignore", category=UserWarning)
+
+class APIType(Enum):
+    POSIX = "posix"
+    REST = "rest"
+    S3 = "s3"
 
 
 def get_args():
@@ -34,12 +47,6 @@ def get_args():
 
     parser.add_argument(
         "-n", "--name", help="Experiment name", default="data loading"
-    )
-    parser.add_argument(
-        "-p",
-        "--path",
-        help="Path of dataset",
-        default="./data/imagenet-mini/val",
     )
     parser.add_argument(
         "-e", "--epoch", help="Number of epochs", default=5, type=int
@@ -52,26 +59,31 @@ def get_args():
     )
     parser.add_argument(
         "-a",
-        "--alluxio",
-        help="Whether to load data from Alluxio, default will load data from the given path directly",
-        action="store_true",
+        "--api",
+        help="The API to use. default is posix",
+        choices=[e.value for e in APIType],
+        default=APIType.POSIX.value
     )
     parser.add_argument(
-        "-ap",
-        "--alluxiopath",
-        help="Full UFS path of the dataset in Alluxio",
-        default="s3://ref-arch/imagenet-mini/val",
+        "-p",
+        "--path",
+        help="Local POSIX PATH if API type is POSIX, full ufs path if REST/S3 API (e.g.s3://ref-arch/imagenet-mini/val)",
+        default="./data/imagenet-mini/val",
     )
     parser.add_argument(
-        "-aw",
-        "--alluxioworkers",
-        help="Alluxio worker addresses in list of host:port,host2:port2 format",
+        "-d",
+        "--doraroot",
+        help="Alluxio REST/S3 API require Dora root ufs address to do path transformation",
+        default="s3://ref-arch/",
+    )
+    parser.add_argument(
+        "--endpoints",
+        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 format (e.g. localhost:28080 for REST API, localhost:29998 for S3 API)",
         default="localhost:28080",
     )
     parser.add_argument(
-        "-ps",
-        "--alluxiopagesize",
-        help="Alluxio page size (e.g. 1MB, 4MB, 1024KB)",
+        "--pagesize",
+        help="REST API: Alluxio page size (e.g. 1MB, 4MB, 1024KB)",
         default="1MB",
     )
 
@@ -83,25 +95,25 @@ class BenchmarkRunner:
 
     def __init__(
         self,
-        path,
         name,
         num_epochs,
         batch_size,
         num_workers,
-        alluxio,
-        alluxio_ufs_path,
-        alluxio_workers,
-        alluxio_page_size,
+        api,
+        path,
+        dora_root,
+        endpoints,
+        page_size,
     ):
-        self.path = path
-        self.name = name
-        self.num_epochs = num_epochs
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.alluxio = alluxio
-        self.alluxio_ufs_path = alluxio_ufs_path
-        self.alluxio_workers = alluxio_workers
-        self.alluxio_page_size = alluxio_page_size
+        self.name=name
+        self.num_epochs=num_epochs
+        self.batch_size=batch_size
+        self.num_workers=num_workers
+        self.api=api
+        self.path=path
+        self.dora_root=dora_root
+        self.endpoints=endpoints
+        self.page_size=page_size
 
     def benchmark_data_loading(self):
         self._check_device()
@@ -119,27 +131,43 @@ class BenchmarkRunner:
         )
 
         dataset = None
-        if self.alluxio:
+        if self.api == APIType.REST.value:
             self._logger.debug(
-                f"Using alluxio dataset with workers {self.alluxio_workers}"
+                f"Using alluxio REST API dataset with workers {self.endpoints}, page size {self.page_size}, ufs path {self.path}"
             )
             alluxio_rest = AlluxioRest(
-                self.alluxio_workers,
-                self.alluxio_page_size,
+                self.endpoints,
+                self.dora_root,
+                self.page_size,
                 self.num_workers,
                 self._logger,
             )
-            dataset = AlluxioDataset(
-                local_path=self.path,
-                alluxio_ufs_path=self.alluxio_ufs_path,
+            dataset = AlluxioRestDataset(
                 alluxio_rest=alluxio_rest,
+                dataset_path=self.path,
                 transform=transform,
                 _logger=self._logger,
             )
-        else:
-            self._logger.debug("Using ImageFolder dataset")
+        elif self.api == APIType.POSIX.value:
+            self._logger.debug(f"Using POSIX API ImageFolder dataset with path {self.path}")
             dataset = ImageFolder(root=self.path, transform=transform)
+        else:
+            self._logger.debug("Using alluxio S3 API dataset")
+            alluxio_s3 = AlluxioS3(
+                self.endpoints,
+                self.dora_root,
+                self.page_size,
+                self.num_workers,
+                self._logger,
+            )
+            dataset = AlluxioS3Dataset(
+                bucket_name="yelp-review",
+                s3_path="val/",
+                transform=transform,
+                _logger=self._logger,
+            )
 
+        print(self.num_workers)
         loader = DataLoader(
             dataset,
             batch_size=self.batch_size,
@@ -173,14 +201,9 @@ class BenchmarkRunner:
         self._logger.debug(f"Using {device}")
 
     def _summarize(self, elapsed_time):
-        if self.alluxio:
-            self._logger.info(
-                f"[Summary] experiment: {self.name} | path: {self.alluxio_ufs_path}"
-            )
-        else:
-            self._logger.info(
-                f"[Summary] experiment: {self.name} | path: {self.path}"
-            )
+        self._logger.info(
+            f"[Summary] experiment: {self.name} | path: {self.path}"
+        )
         self._logger.info(
             f"num_epochs: {self.num_epochs} | batch_size: {self.batch_size} | "
             f"num_workers: {self.num_workers} | time: {elapsed_time:0.4f}"
@@ -191,14 +214,14 @@ if __name__ == "__main__":
     args = get_args()
 
     benchmark_runner = BenchmarkRunner(
-        path=args.path,
         name=args.name,
         num_epochs=args.epoch,
         batch_size=args.batch,
         num_workers=args.worker,
-        alluxio=args.alluxio,
-        alluxio_ufs_path=args.alluxiopath,
-        alluxio_workers=args.alluxioworkers,
-        alluxio_page_size=args.alluxiopagesize,
+        api=args.api,
+        path=args.path,
+        dora_root=args.doraroot,
+        endpoints=args.endpoints,
+        page_size=args.pagesize,
     )
     benchmark_runner.benchmark_data_loading()
