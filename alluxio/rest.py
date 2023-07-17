@@ -9,7 +9,6 @@ from PIL import Image
 from requests.adapters import HTTPAdapter
 from torch.utils.data import Dataset
 
-
 class AlluxioRestDataset(Dataset):
     def __init__(
         self, alluxio_rest, dataset_path, transform, _logger
@@ -20,6 +19,7 @@ class AlluxioRestDataset(Dataset):
         self.data = []
         
         classes = [item['mName'] for item in json.loads(self.alluxio_rest.list_dir(dataset_path)) if item['mType'] == 'directory']
+
         index_to_class = {i: j for i, j in enumerate(classes)}
         
         self.class_to_index = {
@@ -83,10 +83,7 @@ class AlluxioRest:
         worker_address = self.get_worker_address()
         url = f"http://{worker_address}/files"
         rel_path = self.subtract_path(path, self.dora_root)
-        print(path) #s3://ref-arch/imagenet-mini/val
-        print(self.dora_root)  #s3://ref-arch/
-        print(rel_path) #imagenet-mini/val
-        params = {"path": "/imagenet-mini"} # tried /imagenet-mini/val, /imagenet-mini/val/, "imagenet-mini" same result
+        params = {"path": rel_path}
         try:
             response = self.session.get(url, params=params)
             response.raise_for_status()
@@ -95,14 +92,6 @@ class AlluxioRest:
             self._logger.error(
                 f"Error when listing path {rel_path}: error {e}"
             )
-            # ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
-            # java.lang.NullPointerException: msg
-	# at io.netty.util.internal.ObjectUtil.checkNotNull(ObjectUtil.java:39)
-	# at io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:948)
-	# at io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:856)
-	# at io.netty.channel.AbstractChannelHandlerContext.write(AbstractChannelHandlerContext.java:851)
-	# at alluxio.worker.http.HttpServerHandler.channelRead0(HttpServerHandler.java:97)
-	# at alluxio.worker.http.HttpServerHandler.channelRead0(HttpServerHandler.java:60)
             return None  
 
     def read_whole_file(self, file_path):
@@ -156,7 +145,7 @@ class AlluxioRest:
 
     def get_worker_address(self):
         return self.workers[0]
-    
+
     def subtract_path(self, path, parent_path):
         if '://' in path and '://' in parent_path:
             # Remove the parent_path from path

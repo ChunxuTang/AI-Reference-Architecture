@@ -156,18 +156,15 @@ class BenchmarkRunner:
             alluxio_s3 = AlluxioS3(
                 self.endpoints,
                 self.dora_root,
-                self.page_size,
-                self.num_workers,
                 self._logger,
             )
             dataset = AlluxioS3Dataset(
-                bucket_name="yelp-review",
-                s3_path="val/",
+                alluxio_s3=alluxio_s3,
+                dataset_path=self.path,
                 transform=transform,
                 _logger=self._logger,
             )
 
-        print(self.num_workers)
         loader = DataLoader(
             dataset,
             batch_size=self.batch_size,
