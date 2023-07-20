@@ -23,10 +23,12 @@ from alluxio.s3 import AlluxioS3
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
 
+
 class APIType(Enum):
     POSIX = "posix"
     REST = "rest"
     S3 = "s3"
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -38,7 +40,7 @@ def get_args():
         "--api",
         help="The API to use. default is posix",
         choices=[e.value for e in APIType],
-        default=APIType.POSIX.value
+        default=APIType.POSIX.value,
     )
     parser.add_argument(
         "-p",
@@ -77,11 +79,11 @@ class BenchmarkLargeDatasetRunner:
         endpoints,
         page_size,
     ):
-        self.api=api
-        self.path=path
-        self.dora_root=dora_root
-        self.endpoints=endpoints
-        self.page_size=page_size
+        self.api = api
+        self.path = path
+        self.dora_root = dora_root
+        self.endpoints = endpoints
+        self.page_size = page_size
 
     def benchmark_data_loading(self):
         start_time = time.perf_counter()
@@ -94,7 +96,7 @@ class BenchmarkLargeDatasetRunner:
                 self.endpoints,
                 self.dora_root,
                 self.page_size,
-                1,# Only using one thread
+                1,  # Only using one thread
                 self._logger,
             )
             alluxio_rest.read_file(self.path)
@@ -116,7 +118,9 @@ class BenchmarkLargeDatasetRunner:
             alluxio_s3.read_file(self.path)
 
         end_time = time.perf_counter()
-        self._logger.info(f"Data loading in {end_time - start_time:0.4f} seconds")
+        self._logger.info(
+            f"Data loading in {end_time - start_time:0.4f} seconds"
+        )
 
 
 if __name__ == "__main__":

@@ -24,8 +24,10 @@ import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from alluxio.rest import AlluxioRestDataset, AlluxioRest
-from alluxio.s3 import AlluxioS3Dataset, AlluxioS3
+from alluxio.rest import AlluxioRest
+from alluxio.rest import AlluxioRestDataset
+from alluxio.s3 import AlluxioS3
+from alluxio.s3 import AlluxioS3Dataset
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
@@ -34,10 +36,12 @@ fileConfig(log_conf_path, disable_existing_loggers=True)
 logging.getLogger("PIL.TiffImagePlugin").disabled = True
 warnings.filterwarnings("ignore", category=UserWarning)
 
+
 class APIType(Enum):
     POSIX = "posix"
     REST = "rest"
     S3 = "s3"
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -61,7 +65,7 @@ def get_args():
         "--api",
         help="The API to use. default is posix",
         choices=[e.value for e in APIType],
-        default=APIType.POSIX.value
+        default=APIType.POSIX.value,
     )
     parser.add_argument(
         "-p",
@@ -104,15 +108,15 @@ class BenchmarkRunner:
         endpoints,
         page_size,
     ):
-        self.name=name
-        self.num_epochs=num_epochs
-        self.batch_size=batch_size
-        self.num_workers=num_workers
-        self.api=api
-        self.path=path
-        self.dora_root=dora_root
-        self.endpoints=endpoints
-        self.page_size=page_size
+        self.name = name
+        self.num_epochs = num_epochs
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.api = api
+        self.path = path
+        self.dora_root = dora_root
+        self.endpoints = endpoints
+        self.page_size = page_size
 
     def benchmark_data_loading(self):
         self._check_device()
@@ -148,7 +152,9 @@ class BenchmarkRunner:
                 _logger=self._logger,
             )
         elif self.api == APIType.POSIX.value:
-            self._logger.debug(f"Using POSIX API ImageFolder dataset with path {self.path}")
+            self._logger.debug(
+                f"Using POSIX API ImageFolder dataset with path {self.path}"
+            )
             dataset = ImageFolder(root=self.path, transform=transform)
         else:
             self._logger.debug("Using alluxio S3 API dataset")

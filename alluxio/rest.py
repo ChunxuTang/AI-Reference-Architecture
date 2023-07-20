@@ -1,7 +1,7 @@
 import hashlib
 import io
-import os
 import json
+import os
 
 import humanfriendly
 import requests
@@ -9,32 +9,37 @@ from PIL import Image
 from requests.adapters import HTTPAdapter
 from torch.utils.data import Dataset
 
+
 class AlluxioRestDataset(Dataset):
-    def __init__(
-        self, alluxio_rest, dataset_path, transform, _logger
-    ):
+    def __init__(self, alluxio_rest, dataset_path, transform, _logger):
         self.alluxio_rest = alluxio_rest
         self.transform = transform
         self._logger = _logger
         self.data = []
-        
-        classes = [item['mName'] for item in json.loads(self.alluxio_rest.list_dir(dataset_path)) if item['mType'] == 'directory']
+
+        classes = [
+            item["mName"]
+            for item in json.loads(self.alluxio_rest.list_dir(dataset_path))
+            if item["mType"] == "directory"
+        ]
 
         index_to_class = {i: j for i, j in enumerate(classes)}
-        
+
         self.class_to_index = {
             value: key for key, value in index_to_class.items()
         }
 
         for class_name in classes:
             class_path = dataset_path.rstrip("/") + "/" + class_name
-            image_names = [item['mName'] for item in json.loads(self.alluxio_rest.list_dir(class_path)) if item['mType'] == 'file']
+            image_names = [
+                item["mName"]
+                for item in json.loads(self.alluxio_rest.list_dir(class_path))
+                if item["mType"] == "file"
+            ]
             for image_name in image_names:
                 self.data.append(
                     [
-                        class_path
-                        + "/"
-                        + image_name,
+                        class_path + "/" + image_name,
                         class_name,
                     ]
                 )
@@ -62,9 +67,7 @@ class AlluxioRestDataset(Dataset):
 
 # TODO support multiple workers
 class AlluxioRest:
-    def __init__(
-        self, endpoint, dora_root, page_size, concurrency, _logger
-    ):
+    def __init__(self, endpoint, dora_root, page_size, concurrency, _logger):
         self.workers = [item.strip() for item in endpoint.split(",")]
         self.dora_root = dora_root
         self.page_size = humanfriendly.parse_size(page_size)
@@ -92,7 +95,7 @@ class AlluxioRest:
             self._logger.error(
                 f"Error when listing path {rel_path}: error {e}"
             )
-            return None  
+            return None
 
     def read_file(self, file_path):
         file_id = self.get_file_id(file_path)
@@ -147,9 +150,9 @@ class AlluxioRest:
         return self.workers[0]
 
     def subtract_path(self, path, parent_path):
-        if '://' in path and '://' in parent_path:
+        if "://" in path and "://" in parent_path:
             # Remove the parent_path from path
-            relative_path = path[len(parent_path):]
+            relative_path = path[len(parent_path) :]
         else:
             # Get the relative path for local paths
             relative_path = os.path.relpath(path, start=parent_path)
