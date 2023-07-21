@@ -20,7 +20,7 @@ class AlluxioS3Dataset(Dataset):
 
         list_result = self.alluxio_s3.list_objects(dataset_path)
 
-        all_paths = [o.get("Key") for o in list_result]
+        all_paths = [path_info.get("Key") for path_info in list_result]
         # Initialize an empty set to store unique classes and a list to store images
         classes = set()
 
