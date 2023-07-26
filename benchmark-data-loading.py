@@ -70,18 +70,22 @@ def get_args():
     parser.add_argument(
         "-p",
         "--path",
-        help="Local POSIX PATH if API type is POSIX, full ufs path if REST/S3 API (e.g.s3://ref-arch/imagenet-mini/val)",
+        help="Local POSIX PATH if API type is POSIX, full ufs path if "
+        "REST/S3 API (e.g.s3://ref-arch/imagenet-mini/val)",
         default="./data/imagenet-mini/val",
     )
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio REST/S3 API require Dora root ufs address to do path transformation",
+        help="Alluxio REST/S3 API require Dora root ufs address to do path "
+        "transformation",
         default="s3://ref-arch/",
     )
     parser.add_argument(
         "--endpoints",
-        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 format (e.g. localhost:28080 for REST API, localhost:29998 for S3 API)",
+        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 "
+        "format (e.g. localhost:28080 for REST API, localhost:29998 for "
+        "S3 API)",
         default="localhost:28080",
     )
     parser.add_argument(
@@ -136,7 +140,8 @@ class BenchmarkRunner:
         dataset = None
         if self.api == APIType.REST.value:
             self._logger.debug(
-                f"Using alluxio REST API dataset with workers {self.endpoints}, page size {self.page_size}, ufs path {self.path}"
+                f"Using alluxio REST API dataset with workers {self.endpoints}, "
+                f"page size {self.page_size}, ufs path {self.path}"
             )
             alluxio_rest = AlluxioRest(
                 self.endpoints,

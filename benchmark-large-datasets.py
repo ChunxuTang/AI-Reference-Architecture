@@ -32,7 +32,8 @@ class APIType(Enum):
 
 def get_args():
     parser = argparse.ArgumentParser(
-        description="Benchmark loading Large datasets like the Yelp Review dataset"
+        description="Benchmark loading Large datasets like the "
+        "Yelp Review dataset"
     )
 
     parser.add_argument(
@@ -45,18 +46,23 @@ def get_args():
     parser.add_argument(
         "-p",
         "--path",
-        help="Local POSIX PATH if API type is POSIX, full ufs path if REST/S3 API (e.g.s3://ref-arch/yelp-review/yelp_academic_dataset_review.json)",
+        help="Local POSIX PATH if API type is POSIX, "
+        "full ufs path if REST/S3 API "
+        "(e.g.s3://ref-arch/yelp-review/yelp_academic_dataset_review.json)",
         default="./data/yelp-review/yelp_academic_dataset_review.json",
     )
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio REST/S3 API require Dora root ufs address to do path transformation",
+        help="Alluxio REST/S3 API require Dora root ufs address to do path "
+        "transformation",
         default="s3://ref-arch/",
     )
     parser.add_argument(
         "--endpoints",
-        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 format (e.g. localhost:28080 for REST API, localhost:29998 for S3 API)",
+        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 "
+        "format (e.g. localhost:28080 for REST API, localhost:29998 for "
+        "S3 API)",
         default="localhost:28080",
     )
     parser.add_argument(
@@ -90,7 +96,10 @@ class BenchmarkLargeDatasetRunner:
 
         if self.api == APIType.REST.value:
             self._logger.debug(
-                f"Using alluxio REST API reading file with workers {self.endpoints}, dora root {self.dora_root}, page size {self.page_size}, ufs path {self.path}"
+                f"Using alluxio REST API reading file with workers {self.endpoints}, "
+                f"dora root {self.dora_root}, "
+                f"page size {self.page_size}, "
+                f"ufs path {self.path}"
             )
             alluxio_rest = AlluxioRest(
                 self.endpoints,
@@ -108,7 +117,8 @@ class BenchmarkLargeDatasetRunner:
                 f.read()
         else:
             self._logger.debug(
-                f"Using alluxio S3 API reading file with workers {self.endpoints}, dora root {self.dora_root}, ufs path {self.path}"
+                f"Using alluxio S3 API reading file with workers {self.endpoints}, "
+                f"dora root {self.dora_root}, ufs path {self.path}"
             )
             alluxio_s3 = AlluxioS3(
                 self.endpoints,

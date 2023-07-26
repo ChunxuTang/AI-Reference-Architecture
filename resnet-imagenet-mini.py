@@ -177,7 +177,8 @@ class ResnetTrainer:
 
                 batch_end = time.perf_counter()
                 self._logger.debug(
-                    f"Loaded input and labels to the device in {batch_end - batch_start:0.4f} seconds"
+                    f"Loaded input and labels to the device in "
+                    f"{batch_end - batch_start:0.4f} seconds"
                 )
 
                 # Zero out the optimization
@@ -194,7 +195,8 @@ class ResnetTrainer:
                 batch_start = time.perf_counter()
 
             self._logger.info(
-                f"Epoch {epoch + 1}/{self.num_epochs}, Loss: {loss.item():.4f} at the timestamp {time.perf_counter()}"
+                f"Epoch {epoch + 1}/{self.num_epochs}, Loss: {loss.item():.4f} "
+                f"at the timestamp {time.perf_counter()}"
             )
 
             if self.profiler_enabled:

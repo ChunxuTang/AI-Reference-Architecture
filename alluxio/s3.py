@@ -1,13 +1,9 @@
-import hashlib
 import io
 import os
 
 import boto3
-import humanfriendly
-import requests
 from botocore.exceptions import NoCredentialsError
 from PIL import Image
-from requests.adapters import HTTPAdapter
 from torch.utils.data import Dataset
 
 
@@ -117,7 +113,8 @@ class AlluxioS3:
         # TODO(lu) test the combinations
         if len(parts) == 0:
             self._logger.error(
-                "Alluxio S3 API can only execute under a directory under dora root. This directory will be used as S3 bucket name"
+                "Alluxio S3 API can only execute under a directory under "
+                "dora root. This directory will be used as S3 bucket name"
             )
             return None
         elif len(parts) == 1:
