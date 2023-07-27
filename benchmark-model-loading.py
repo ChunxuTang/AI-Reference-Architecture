@@ -6,7 +6,6 @@ with 3B parameters.
 Example usage:
 python3 benchmark-model-loadingpy -mp ./models/flan-t5-xl -tp ./models/flan-t5-xl
 """
-
 import argparse
 import logging
 import time
@@ -17,6 +16,7 @@ from transformers import T5Tokenizer
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
+_logger = logging.getLogger("BenchmarkModelLoading")
 
 
 def get_args():
@@ -42,8 +42,6 @@ def get_args():
 
 
 class BenchmarkModelLoadingRunner:
-    _logger = logging.getLogger("BenchmarkModelLoadingRunner")
-
     def __init__(self, model_path, tokenizer_path):
         self.model_path = model_path
         self.tokenizer_path = tokenizer_path
@@ -53,17 +51,15 @@ class BenchmarkModelLoadingRunner:
     def benchmark_model_loading(self):
         start_time = time.perf_counter()
 
-        self._logger.debug(f"Loading tokenizer from {self.tokenizer_path}...")
+        _logger.debug(f"Loading tokenizer from {self.tokenizer_path}...")
         self.tokenizer = T5Tokenizer.from_pretrained(self.tokenizer_path)
-        self._logger.debug(f"Loading model from {self.model_path}...")
+        _logger.debug(f"Loading model from {self.model_path}...")
         self.model = T5ForConditionalGeneration.from_pretrained(
             self.model_path, device_map="auto"
         )
 
         end_time = time.perf_counter()
-        self._logger.info(
-            f"Model loading in {end_time - start_time:0.4f} seconds"
-        )
+        _logger.info(f"Model loading in {end_time - start_time:0.4f} seconds")
 
     def test_model_inference(
         self,
@@ -75,9 +71,9 @@ class BenchmarkModelLoadingRunner:
         ).input_ids.to("cuda")
         outputs = self.model.generate(input_ids, max_length=100)
 
-        self._logger.info("Test model inference with the following question:")
-        self._logger.info(input_text)
-        self._logger.info(self.tokenizer.decode(outputs[0]))
+        _logger.info("Test model inference with the following question:")
+        _logger.info(input_text)
+        _logger.info(self.tokenizer.decode(outputs[0]))
 
 
 if __name__ == "__main__":

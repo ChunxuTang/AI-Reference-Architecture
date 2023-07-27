@@ -31,6 +31,7 @@ from alluxio.s3 import AlluxioS3Dataset
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
+_logger = logging.getLogger("BenchmarkDataLoading")
 # Explicitly disable the PIL.TiffImagePlugin logger as it also uses
 # the StreamHandler which will overrun the console output.
 logging.getLogger("PIL.TiffImagePlugin").disabled = True
@@ -98,8 +99,6 @@ def get_args():
 
 
 class BenchmarkRunner:
-    _logger = logging.getLogger("BenchmarkRunner")
-
     def __init__(
         self,
         name,
@@ -139,7 +138,7 @@ class BenchmarkRunner:
 
         dataset = None
         if self.api == APIType.REST.value:
-            self._logger.debug(
+            _logger.debug(
                 f"Using alluxio REST API dataset with workers {self.endpoints}, "
                 f"page size {self.page_size}, ufs path {self.path}"
             )
@@ -148,31 +147,31 @@ class BenchmarkRunner:
                 self.dora_root,
                 self.page_size,
                 self.num_workers,
-                self._logger,
+                _logger,
             )
             dataset = AlluxioRestDataset(
                 alluxio_rest=alluxio_rest,
                 dataset_path=self.path,
                 transform=transform,
-                _logger=self._logger,
+                logger=_logger,
             )
         elif self.api == APIType.POSIX.value:
-            self._logger.debug(
+            _logger.debug(
                 f"Using POSIX API ImageFolder dataset with path {self.path}"
             )
             dataset = ImageFolder(root=self.path, transform=transform)
         else:
-            self._logger.debug("Using alluxio S3 API dataset")
+            _logger.debug("Using alluxio S3 API dataset")
             alluxio_s3 = AlluxioS3(
                 self.endpoints,
                 self.dora_root,
-                self._logger,
+                _logger,
             )
             dataset = AlluxioS3Dataset(
                 alluxio_s3=alluxio_s3,
                 dataset_path=self.path,
                 transform=transform,
-                _logger=self._logger,
+                logger=_logger,
             )
 
         loader = DataLoader(
@@ -188,13 +187,11 @@ class BenchmarkRunner:
             for _, _ in loader:
                 pass
             epoch_end = time.perf_counter()
-            self._logger.debug(
+            _logger.debug(
                 f"Epoch {epoch}: {epoch_end - epoch_start:0.4f} seconds"
             )
         end_time = time.perf_counter()
-        self._logger.debug(
-            f"Data loading in {end_time - start_time:0.4f} seconds"
-        )
+        _logger.debug(f"Data loading in {end_time - start_time:0.4f} seconds")
         self._summarize(end_time - start_time)
 
     def _check_device(self):
@@ -205,13 +202,11 @@ class BenchmarkRunner:
             if torch.backends.mps.is_available()
             else "cpu"
         )
-        self._logger.debug(f"Using {device}")
+        _logger.debug(f"Using {device}")
 
     def _summarize(self, elapsed_time):
-        self._logger.info(
-            f"[Summary] experiment: {self.name} | path: {self.path}"
-        )
-        self._logger.info(
+        _logger.info(f"[Summary] experiment: {self.name} | path: {self.path}")
+        _logger.info(
             f"num_epochs: {self.num_epochs} | batch_size: {self.batch_size} | "
             f"num_workers: {self.num_workers} | time: {elapsed_time:0.4f}"
         )

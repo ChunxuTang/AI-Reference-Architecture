@@ -22,6 +22,7 @@ from alluxio.s3 import AlluxioS3
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
+_logger = logging.getLogger("BenchmarkLargeDatasetLoading")
 
 
 class APIType(Enum):
@@ -75,8 +76,6 @@ def get_args():
 
 
 class BenchmarkLargeDatasetRunner:
-    _logger = logging.getLogger("BenchmarkLargeDatasetRunner")
-
     def __init__(
         self,
         api,
@@ -95,7 +94,7 @@ class BenchmarkLargeDatasetRunner:
         start_time = time.perf_counter()
 
         if self.api == APIType.REST.value:
-            self._logger.debug(
+            _logger.debug(
                 f"Using alluxio REST API reading file with workers {self.endpoints}, "
                 f"dora root {self.dora_root}, "
                 f"page size {self.page_size}, "
@@ -106,31 +105,29 @@ class BenchmarkLargeDatasetRunner:
                 self.dora_root,
                 self.page_size,
                 1,  # Only using one thread
-                self._logger,
+                _logger,
             )
             alluxio_rest.read_file(self.path)
         elif self.api == APIType.POSIX.value:
-            self._logger.debug(
+            _logger.debug(
                 f"Using POSIX API reading file with path {self.path}"
             )
             with open(self.path, "r") as f:
                 f.read()
         else:
-            self._logger.debug(
+            _logger.debug(
                 f"Using alluxio S3 API reading file with workers {self.endpoints}, "
                 f"dora root {self.dora_root}, ufs path {self.path}"
             )
             alluxio_s3 = AlluxioS3(
                 self.endpoints,
                 self.dora_root,
-                self._logger,
+                _logger,
             )
             alluxio_s3.read_file(self.path)
 
         end_time = time.perf_counter()
-        self._logger.info(
-            f"Data loading in {end_time - start_time:0.4f} seconds"
-        )
+        _logger.info(f"Data loading in {end_time - start_time:0.4f} seconds")
 
 
 if __name__ == "__main__":

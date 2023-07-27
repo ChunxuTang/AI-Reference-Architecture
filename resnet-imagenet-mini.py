@@ -15,6 +15,7 @@ import torchvision.transforms as transforms
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
+_logger = logging.getLogger("ResnetImageNetTrainer")
 # Explicitly disable the PIL.TiffImagePlugin logger as it also uses
 # the StreamHandler which will overrun the console output.
 logging.getLogger("PIL.TiffImagePlugin").disabled = True
@@ -65,8 +66,6 @@ def get_args():
 
 
 class ResnetTrainer:
-    _logger = logging.getLogger("ResnetTrainer")
-
     def __init__(
         self,
         input_path="/mnt/alluxio/fuse/imagenet-mini/train",
@@ -78,7 +77,7 @@ class ResnetTrainer:
         learning_rate=0.001,
         profiler_enabled=False,
     ):
-        self._logger.info(f"Start time: {time.perf_counter()}")
+        _logger.info(f"Start time: {time.perf_counter()}")
 
         self.input_path = input_path
         self.output_path = output_path
@@ -133,7 +132,7 @@ class ResnetTrainer:
 
     def _load_model(self):
         model = torchvision.models.resnet18(pretrained=True)
-        self._logger.info(
+        _logger.info(
             f"Current time after loading the model: {time.perf_counter()}"
         )
 
@@ -142,7 +141,7 @@ class ResnetTrainer:
 
         # Set the model to run on the device
         model = model.to(self.device)
-        self._logger.info(
+        _logger.info(
             f"Current time after loading the model to device: {time.perf_counter()}"
         )
 
@@ -176,7 +175,7 @@ class ResnetTrainer:
                 labels = labels.to(self.device)
 
                 batch_end = time.perf_counter()
-                self._logger.debug(
+                _logger.debug(
                     f"Loaded input and labels to the device in "
                     f"{batch_end - batch_start:0.4f} seconds"
                 )
@@ -194,7 +193,7 @@ class ResnetTrainer:
 
                 batch_start = time.perf_counter()
 
-            self._logger.info(
+            _logger.info(
                 f"Epoch {epoch + 1}/{self.num_epochs}, Loss: {loss.item():.4f} "
                 f"at the timestamp {time.perf_counter()}"
             )
@@ -202,19 +201,17 @@ class ResnetTrainer:
             if self.profiler_enabled:
                 profiler.step()
 
-        self._logger.info(f"Finished Training, Loss: {loss.item():.4f}")
+        _logger.info(f"Finished Training, Loss: {loss.item():.4f}")
 
         end_time = time.perf_counter()
-        self._logger.info(
-            f"Training time in {end_time - start_time:0.4f} seconds"
-        )
+        _logger.info(f"Training time in {end_time - start_time:0.4f} seconds")
 
         if self.profiler_enabled:
             profiler.stop()
 
     def _save_model(self):
         torch.save(self.model.state_dict(), self.output_path)
-        self._logger.info(f"Saved PyTorch Model State to {self.output_path}")
+        _logger.info(f"Saved PyTorch Model State to {self.output_path}")
 
     def _check_device(self):
         device = (
@@ -224,7 +221,7 @@ class ResnetTrainer:
             if torch.backends.mps.is_available()
             else "cpu"
         )
-        self._logger.debug(f"Using {device}")
+        _logger.debug(f"Using {device}")
 
         return device
 

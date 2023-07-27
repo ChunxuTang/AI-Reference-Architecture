@@ -1,4 +1,5 @@
 import io
+import logging
 import os
 
 import boto3
@@ -6,12 +7,17 @@ from botocore.exceptions import NoCredentialsError
 from PIL import Image
 from torch.utils.data import Dataset
 
+logging.basicConfig(
+    level=logging.WARN,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 
 class AlluxioS3Dataset(Dataset):
-    def __init__(self, alluxio_s3, dataset_path, transform, _logger):
+    def __init__(self, alluxio_s3, dataset_path, transform, logger):
         self.alluxio_s3 = alluxio_s3
         self.transform = transform
-        self._logger = _logger
+        self.logger = logger or logging.getLogger("AlluxioS3Dataset")
         self.data = []
 
         list_result = self.alluxio_s3.list_objects(dataset_path)
@@ -51,7 +57,7 @@ class AlluxioS3Dataset(Dataset):
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
         except Exception as e:
-            self._logger.error(
+            self.logger.error(
                 f"Error when decoding image: {image_path}, error: {e}"
             )
             return None
@@ -64,10 +70,10 @@ class AlluxioS3Dataset(Dataset):
 
 
 class AlluxioS3:
-    def __init__(self, endpoints, dora_root, _logger):
+    def __init__(self, endpoints, dora_root, logger):
         self.workers = [item.strip() for item in endpoints.split(",")]
         self.dora_root = dora_root
-        self._logger = _logger
+        self.logger = logger or logging.getLogger("AlluxioS3")
 
     def list_objects(self, full_path):
         objects = []
@@ -100,7 +106,7 @@ class AlluxioS3:
             data = self.get_s3_client().get_object(Bucket=bucket, Key=path)
             return data["Body"].read()
         except NoCredentialsError:
-            self._logger.error("No AWS credentials were found.")
+            self.logger.error("No AWS credentials were found.")
             return None
 
     # Alluxio S3 API views top-level dir under dora root as bucket
@@ -112,7 +118,7 @@ class AlluxioS3:
         parts = alluxio_path.split("/", 1)
         # TODO(lu) test the combinations
         if len(parts) == 0:
-            self._logger.error(
+            self.logger.error(
                 "Alluxio S3 API can only execute under a directory under "
                 "dora root. This directory will be used as S3 bucket name"
             )

@@ -1,6 +1,7 @@
 import hashlib
 import io
 import json
+import logging
 import os
 
 import humanfriendly
@@ -9,12 +10,17 @@ from PIL import Image
 from requests.adapters import HTTPAdapter
 from torch.utils.data import Dataset
 
+logging.basicConfig(
+    level=logging.WARN,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+
 
 class AlluxioRestDataset(Dataset):
-    def __init__(self, alluxio_rest, dataset_path, transform, _logger):
+    def __init__(self, alluxio_rest, dataset_path, transform, logger):
         self.alluxio_rest = alluxio_rest
         self.transform = transform
-        self._logger = _logger
+        self.logger = logger or logging.getLogger("AlluxioRestDataset")
         self.data = []
 
         classes = [
@@ -53,7 +59,7 @@ class AlluxioRestDataset(Dataset):
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
         except Exception as e:
-            self._logger.error(
+            self.logger.error(
                 f"Error when decoding image: {image_path}, error: {e}"
             )
             return None
@@ -70,11 +76,11 @@ class AlluxioRest:
     LIST_URL_FORMAT = "http://{worker_address}/files"
     PAGE_URL_FORMAT = "http://{worker_address}/page"
 
-    def __init__(self, endpoint, dora_root, page_size, concurrency, _logger):
+    def __init__(self, endpoint, dora_root, page_size, concurrency, logger):
         self.workers = [item.strip() for item in endpoint.split(",")]
         self.dora_root = dora_root
         self.page_size = humanfriendly.parse_size(page_size)
-        self._logger = _logger
+        self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self.create_session(concurrency)
 
     def create_session(self, concurrency):
@@ -97,9 +103,7 @@ class AlluxioRest:
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:
-            self._logger.error(
-                f"Error when listing path {rel_path}: error {e}"
-            )
+            self.logger.error(f"Error when listing path {rel_path}: error {e}")
             return None
 
     def read_file(self, file_path):
@@ -134,7 +138,7 @@ class AlluxioRest:
             response.raise_for_status()
             return response.content
         except requests.exceptions.RequestException as e:
-            self._logger.error(
+            self.logger.error(
                 f"Error when requesting file {file_id} page {page_index}: error {e}"
             )
             return None
