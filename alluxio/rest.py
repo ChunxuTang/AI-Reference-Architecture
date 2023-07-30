@@ -73,8 +73,10 @@ class AlluxioRestDataset(Dataset):
 
 # TODO support multiple workers
 class AlluxioRest:
-    LIST_URL_FORMAT = "http://{worker_address}/files"
-    PAGE_URL_FORMAT = "http://{worker_address}/page"
+    LIST_URL_FORMAT = "http://{worker_address}/v1/files"
+    PAGE_URL_FORMAT = (
+        "http://{worker_address}/v1/file/{file_id}/page/{page_index}"
+    )
 
     def __init__(self, endpoint, dora_root, page_size, concurrency, logger):
         self.workers = [item.strip() for item in endpoint.split(",")]
@@ -128,12 +130,13 @@ class AlluxioRest:
         return content
 
     def read_page(self, worker_address, file_id, page_index):
-        params = {"fileId": file_id, "pageIndex": page_index}
-
         try:
             response = self.session.get(
-                self.PAGE_URL_FORMAT.format(worker_address=worker_address),
-                params=params,
+                self.PAGE_URL_FORMAT.format(
+                    worker_address=worker_address,
+                    file_id=file_id,
+                    page_index=page_index,
+                ),
             )
             response.raise_for_status()
             return response.content
