@@ -153,24 +153,13 @@ class BenchmarkRunner:
             _logger.debug(
                 f"Using alluxio REST API dataset with workers {self.alluxio_workers} and ufs path {self.path} "
             )
-            alluxio_rest = None
-            if self.ALLUXIO_PAGE_SIZE_KEY in self.options:
-                page_size = self.options[self.ALLUXIO_PAGE_SIZE_KEY]
-                _logger.debug(f"Page size is set to {page_size}")
-                alluxio_rest = AlluxioRest(
-                    alluxio_workers=self.alluxio_workers,
-                    dora_root=self.dora_root,
-                    concurrency=self.num_workers,
-                    logger=_logger,
-                    page_size=self.page_size,
-                )
-            else:
-                alluxio_rest = AlluxioRest(
-                    alluxio_workers=self.alluxio_workers,
-                    dora_root=self.dora_root,
-                    concurrency=self.num_workers,
-                    logger=_logger,
-                )
+            alluxio_rest = AlluxioRest(
+                alluxio_workers=self.alluxio_workers,
+                dora_root=self.dora_root,
+                options=self.options,
+                concurrency=self.num_workers,
+                logger=_logger,
+            )
 
             dataset = AlluxioRestDataset(
                 alluxio_rest=alluxio_rest,

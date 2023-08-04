@@ -73,21 +73,22 @@ class AlluxioRestDataset(Dataset):
 
 # TODO support multiple workers
 class AlluxioRest:
+    ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
     LIST_URL_FORMAT = "http://{worker_host}:28080/v1/files"
     PAGE_URL_FORMAT = (
         "http://{worker_host}:28080/v1/file/{file_id}/page/{page_index}"
     )
 
     def __init__(
-        self, alluxio_workers, dora_root, concurrency, logger, page_size="1MB"
+        self, alluxio_workers, dora_root, options, concurrency, logger
     ):
         self.alluxio_workers = [
             item.strip() for item in alluxio_workers.split(",")
         ]
         self.dora_root = dora_root
-        self.page_size = humanfriendly.parse_size(page_size)
         self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self.create_session(concurrency)
+        self.parse_alluxio_rest_options(options)
 
     def create_session(self, concurrency):
         session = requests.Session()
@@ -96,6 +97,15 @@ class AlluxioRest:
         )
         session.mount("http://", adapter)
         return session
+
+    def parse_alluxio_rest_options(self, options):
+        page_size = None
+        if self.ALLUXIO_PAGE_SIZE_KEY in self.options:
+            page_size = self.options[self.ALLUXIO_PAGE_SIZE_KEY]
+            _logger.debug(f"Page size is set to {page_size}")
+        else:
+            page_size = "1MB"
+        self.page_size = humanfriendly.parse_size(page_size)
 
     def list_dir(self, path):
         worker_host = self.get_worker_host()

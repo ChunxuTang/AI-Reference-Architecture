@@ -7,9 +7,10 @@ Note that replace endpoints localhost to your worker_ip
 POSIX API
 - python3 benchmark-large-datasets.py -a posix -p /mnt/alluxio/fuse/yelp-review/yelp_academic_dataset_review.json
 REST API
-- python3 benchmark-large-datasets.py -a rest -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --endpoints localhost:28080 --pagesize 20MB
+- python3 benchmark-large-datasets.py -a rest -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --alluxioworkers localhost
+- Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
-- python3 benchmark-large-datasets.py -a s3 -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --endpoints localhost:29998
+- python3 benchmark-large-datasets.py -a s3 -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --alluxioworkers localhost
 """
 import argparse
 import logging
@@ -29,6 +30,16 @@ class APIType(Enum):
     POSIX = "posix"
     REST = "rest"
     S3 = "s3"
+
+
+def parse_options(options_str):
+    options_dict = {}
+    if options_str:
+        key_value_pairs = options_str.split(",")
+        for pair in key_value_pairs:
+            key, value = pair.split("=")
+            options_dict[key.strip()] = value.strip()
+    return options_dict
 
 
 def get_args():
@@ -60,35 +71,37 @@ def get_args():
         default="s3://ref-arch/",
     )
     parser.add_argument(
-        "--endpoints",
-        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 "
-        "format (e.g. localhost:28080 for REST API, localhost:29998 for "
-        "S3 API)",
-        default="localhost:28080",
+        "-aw",
+        "--alluxioworkers",
+        help="Alluxio REST/S3 API require worker hostnames in format of host1,host2,host3",
+        default="localhost",
     )
     parser.add_argument(
-        "--pagesize",
-        help="REST API: Alluxio page size (e.g. 1MB, 4MB, 1024KB)",
-        default="1MB",
+        "-o",
+        "--options",
+        help="Additional Alluxio property key value pars in format of key1=value1,key2=value2",
+        default="",
     )
 
     return parser.parse_args()
 
 
 class BenchmarkLargeDatasetRunner:
+    ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
+
     def __init__(
         self,
         api,
         path,
         dora_root,
-        endpoints,
-        page_size,
+        alluxio_workers,
+        options,
     ):
         self.api = api
         self.path = path
         self.dora_root = dora_root
-        self.endpoints = endpoints
-        self.page_size = page_size
+        self.alluxio_workers = alluxio_workers
+        self.options = options
 
     def benchmark_data_loading(self):
         start_time = time.perf_counter()
@@ -101,11 +114,11 @@ class BenchmarkLargeDatasetRunner:
                 f"ufs path {self.path}"
             )
             alluxio_rest = AlluxioRest(
-                self.endpoints,
-                self.dora_root,
-                self.page_size,
-                1,  # Only using one thread
-                _logger,
+                alluxio_workers=self.alluxio_workers,
+                dora_root=self.dora_root,
+                options=self.options,
+                concurrency=1,
+                logger=_logger,
             )
             alluxio_rest.read_file(self.path)
         elif self.api == APIType.POSIX.value:
@@ -132,12 +145,13 @@ class BenchmarkLargeDatasetRunner:
 
 if __name__ == "__main__":
     args = get_args()
+    options_dict = parse_options(args.options)
 
     benchmark_large_dataset_runner = BenchmarkLargeDatasetRunner(
         api=args.api,
         path=args.path,
         dora_root=args.doraroot,
-        endpoints=args.endpoints,
-        page_size=args.pagesize,
+        alluxio_workers=args.alluxioworkers,
+        options=options_dict,
     )
     benchmark_large_dataset_runner.benchmark_data_loading()
