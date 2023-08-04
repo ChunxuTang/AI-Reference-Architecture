@@ -154,7 +154,7 @@ class BenchmarkRunner:
                 f"Using alluxio REST API dataset with workers {self.alluxio_workers} and ufs path {self.path} "
             )
             alluxio_rest = AlluxioRest(
-                alluxio_workers=self.alluxio_workers,
+                worker_hosts=self.alluxio_workers,
                 dora_root=self.dora_root,
                 options=self.options,
                 concurrency=self.num_workers,

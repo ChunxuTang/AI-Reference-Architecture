@@ -10,6 +10,9 @@ from PIL import Image
 from requests.adapters import HTTPAdapter
 from torch.utils.data import Dataset
 
+from alluxio.workerring import ConsistentHashProvider
+from alluxio.workerring import WorkerNetAddress
+
 logging.basicConfig(
     level=logging.WARN,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -79,16 +82,17 @@ class AlluxioRest:
         "http://{worker_host}:28080/v1/file/{file_id}/page/{page_index}"
     )
 
-    def __init__(
-        self, alluxio_workers, dora_root, options, concurrency, logger
-    ):
-        self.alluxio_workers = [
-            item.strip() for item in alluxio_workers.split(",")
-        ]
+    def __init__(self, worker_hosts, dora_root, options, concurrency, logger):
+        self.alluxio_workers = WorkerNetAddress.create_worker_addresses(
+            worker_hosts
+        )
         self.dora_root = dora_root
         self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self.create_session(concurrency)
         self.parse_alluxio_rest_options(options)
+        self.hash_provider = ConsistentHashProvider(
+            self.alluxio_workers, self.logger
+        )
 
     def create_session(self, concurrency):
         session = requests.Session()
@@ -100,15 +104,16 @@ class AlluxioRest:
 
     def parse_alluxio_rest_options(self, options):
         page_size = None
-        if self.ALLUXIO_PAGE_SIZE_KEY in self.options:
-            page_size = self.options[self.ALLUXIO_PAGE_SIZE_KEY]
+        if self.ALLUXIO_PAGE_SIZE_KEY in options:
+            page_size = options[self.ALLUXIO_PAGE_SIZE_KEY]
             _logger.debug(f"Page size is set to {page_size}")
         else:
             page_size = "1MB"
         self.page_size = humanfriendly.parse_size(page_size)
 
     def list_dir(self, path):
-        worker_host = self.get_worker_host()
+        path_id = self.get_path_hash(path)
+        worker_host = self.get_preferred_worker_host(path_id)
         rel_path = self.subtract_path(path, self.dora_root)
         params = {"path": rel_path}
         try:
@@ -123,8 +128,8 @@ class AlluxioRest:
             return None
 
     def read_file(self, file_path):
-        file_id = self.get_file_id(file_path)
-        worker_host = self.get_worker_host()
+        path_id = self.get_path_hash(file_path)
+        worker_host = self.get_preferred_worker_host(path_id)
         page_index = 0
 
         def page_generator():
@@ -158,7 +163,7 @@ class AlluxioRest:
             )
             return None
 
-    def get_file_id(self, uri):
+    def get_path_hash(self, uri):
         hash_functions = [
             hashlib.sha256,
             hashlib.md5,
@@ -172,8 +177,15 @@ class AlluxioRest:
             except AttributeError:
                 continue
 
-    def get_worker_host(self):
-        return self.alluxio_workers[0]
+    def get_preferred_worker_host(self, path_id):
+        workers = self.hash_provider.get_multiple_workers(path_id, 1)
+        if len(workers) != 1:
+            raise ValueError(
+                "Expected exactly one worker from hash ring, but found {} workers.".format(
+                    len(workers)
+                )
+            )
+        return workers[0].host
 
     def subtract_path(self, path, parent_path):
         if "://" in path and "://" in parent_path:
@@ -182,4 +194,5 @@ class AlluxioRest:
         else:
             # Get the relative path for local paths
             relative_path = os.path.relpath(path, start=parent_path)
+            relative_path = "/" + relative_path
         return relative_path
