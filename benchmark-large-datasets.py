@@ -87,8 +87,6 @@ def get_args():
 
 
 class BenchmarkLargeDatasetRunner:
-    ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
-
     def __init__(
         self,
         api,

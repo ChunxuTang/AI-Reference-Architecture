@@ -109,8 +109,6 @@ def parse_options(options_str):
 
 
 class BenchmarkRunner:
-    ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
-
     def __init__(
         self,
         name,
