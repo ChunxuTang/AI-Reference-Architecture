@@ -73,13 +73,17 @@ class AlluxioRestDataset(Dataset):
 
 # TODO support multiple workers
 class AlluxioRest:
-    LIST_URL_FORMAT = "http://{worker_address}/v1/files"
+    LIST_URL_FORMAT = "http://{worker_host}:28080/v1/files"
     PAGE_URL_FORMAT = (
-        "http://{worker_address}/v1/file/{file_id}/page/{page_index}"
+        "http://{worker_host}:28080/v1/file/{file_id}/page/{page_index}"
     )
 
-    def __init__(self, endpoint, dora_root, page_size, concurrency, logger):
-        self.workers = [item.strip() for item in endpoint.split(",")]
+    def __init__(
+        self, alluxio_workers, dora_root, concurrency, logger, page_size="1MB"
+    ):
+        self.alluxio_workers = [
+            item.strip() for item in alluxio_workers.split(",")
+        ]
         self.dora_root = dora_root
         self.page_size = humanfriendly.parse_size(page_size)
         self.logger = logger or logging.getLogger("AlluxioRest")
@@ -94,12 +98,12 @@ class AlluxioRest:
         return session
 
     def list_dir(self, path):
-        worker_address = self.get_worker_address()
+        worker_host = self.get_worker_host()
         rel_path = self.subtract_path(path, self.dora_root)
         params = {"path": rel_path}
         try:
             response = self.session.get(
-                self.LIST_URL_FORMAT.format(worker_address=worker_address),
+                self.LIST_URL_FORMAT.format(worker_host=worker_host),
                 params=params,
             )
             response.raise_for_status()
@@ -110,15 +114,13 @@ class AlluxioRest:
 
     def read_file(self, file_path):
         file_id = self.get_file_id(file_path)
-        worker_address = self.get_worker_address()
+        worker_host = self.get_worker_host()
         page_index = 0
 
         def page_generator():
             nonlocal page_index
             while True:
-                page_content = self.read_page(
-                    worker_address, file_id, page_index
-                )
+                page_content = self.read_page(worker_host, file_id, page_index)
                 if not page_content:
                     return
                 yield page_content
@@ -129,11 +131,11 @@ class AlluxioRest:
         content = b"".join(page_generator())
         return content
 
-    def read_page(self, worker_address, file_id, page_index):
+    def read_page(self, worker_host, file_id, page_index):
         try:
             response = self.session.get(
                 self.PAGE_URL_FORMAT.format(
-                    worker_address=worker_address,
+                    worker_host=worker_host,
                     file_id=file_id,
                     page_index=page_index,
                 ),
@@ -160,8 +162,8 @@ class AlluxioRest:
             except AttributeError:
                 continue
 
-    def get_worker_address(self):
-        return self.workers[0]
+    def get_worker_host(self):
+        return self.alluxio_workers[0]
 
     def subtract_path(self, path, parent_path):
         if "://" in path and "://" in parent_path:

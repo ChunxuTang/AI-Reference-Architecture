@@ -8,9 +8,10 @@ POSIX API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a posix -p /mnt/alluxio/fuse/imagenet-mini/val
 REST API
-- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a rest -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --endpoints localhost:28080 --pagesize 20MB
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a rest -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
+- Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
-- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a s3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --endpoints localhost:29998
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a s3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
 """
 import argparse
 import logging
@@ -78,27 +79,38 @@ def get_args():
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio REST/S3 API require Dora root ufs address to do path "
-        "transformation",
+        help="Alluxio REST/S3 API require Dora root ufs address to do path transformation",
         default="s3://ref-arch/",
     )
     parser.add_argument(
-        "--endpoints",
-        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 "
-        "format (e.g. localhost:28080 for REST API, localhost:29998 for "
-        "S3 API)",
-        default="localhost:28080",
+        "-aw",
+        "--alluxioworkers",
+        help="Alluxio REST/S3 API require worker hostnames in format of host1,host2,host3",
+        default="localhost",
     )
     parser.add_argument(
-        "--pagesize",
-        help="REST API: Alluxio page size (e.g. 1MB, 4MB, 1024KB)",
-        default="1MB",
+        "-o",
+        "--options",
+        help="Additional Alluxio property key value pars in format of key1=value1,key2=value2",
+        default="",
     )
 
     return parser.parse_args()
 
 
+def parse_options(options_str):
+    options_dict = {}
+    if options_str:
+        key_value_pairs = options_str.split(",")
+        for pair in key_value_pairs:
+            key, value = pair.split("=")
+            options_dict[key.strip()] = value.strip()
+    return options_dict
+
+
 class BenchmarkRunner:
+    ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
+
     def __init__(
         self,
         name,
@@ -108,8 +120,8 @@ class BenchmarkRunner:
         api,
         path,
         dora_root,
-        endpoints,
-        page_size,
+        alluxio_workers,
+        options,
     ):
         self.name = name
         self.num_epochs = num_epochs
@@ -118,8 +130,8 @@ class BenchmarkRunner:
         self.api = api
         self.path = path
         self.dora_root = dora_root
-        self.endpoints = endpoints
-        self.page_size = page_size
+        self.alluxio_workers = alluxio_workers
+        self.options = options
 
     def benchmark_data_loading(self):
         self._check_device()
@@ -139,16 +151,27 @@ class BenchmarkRunner:
         dataset = None
         if self.api == APIType.REST.value:
             _logger.debug(
-                f"Using alluxio REST API dataset with workers {self.endpoints}, "
-                f"page size {self.page_size}, ufs path {self.path}"
+                f"Using alluxio REST API dataset with workers {self.alluxio_workers} and ufs path {self.path} "
             )
-            alluxio_rest = AlluxioRest(
-                self.endpoints,
-                self.dora_root,
-                self.page_size,
-                self.num_workers,
-                _logger,
-            )
+            alluxio_rest = None
+            if self.ALLUXIO_PAGE_SIZE_KEY in self.options:
+                page_size = self.options[self.ALLUXIO_PAGE_SIZE_KEY]
+                _logger.debug(f"Page size is set to {page_size}")
+                alluxio_rest = AlluxioRest(
+                    alluxio_workers=self.alluxio_workers,
+                    dora_root=self.dora_root,
+                    concurrency=self.num_workers,
+                    logger=_logger,
+                    page_size=self.page_size,
+                )
+            else:
+                alluxio_rest = AlluxioRest(
+                    alluxio_workers=self.alluxio_workers,
+                    dora_root=self.dora_root,
+                    concurrency=self.num_workers,
+                    logger=_logger,
+                )
+
             dataset = AlluxioRestDataset(
                 alluxio_rest=alluxio_rest,
                 dataset_path=self.path,
@@ -163,7 +186,7 @@ class BenchmarkRunner:
         else:
             _logger.debug("Using alluxio S3 API dataset")
             alluxio_s3 = AlluxioS3(
-                self.endpoints,
+                self.alluxio_workers,
                 self.dora_root,
                 _logger,
             )
@@ -214,6 +237,7 @@ class BenchmarkRunner:
 
 if __name__ == "__main__":
     args = get_args()
+    options_dict = parse_options(args.options)
 
     benchmark_runner = BenchmarkRunner(
         name=args.name,
@@ -223,7 +247,7 @@ if __name__ == "__main__":
         api=args.api,
         path=args.path,
         dora_root=args.doraroot,
-        endpoints=args.endpoints,
-        page_size=args.pagesize,
+        alluxio_workers=args.alluxioworkers,
+        options=options_dict,
     )
     benchmark_runner.benchmark_data_loading()
