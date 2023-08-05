@@ -205,14 +205,19 @@ class BenchmarkRunner:
         self._summarize(end_time - start_time)
 
     def _check_device(self):
-        device = (
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
-        )
-        _logger.debug(f"Using {device}")
+        try:
+            device = (
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps"
+                if torch.backends.mps.is_available()
+                else "cpu"
+            )
+             _logger.debug(f"Using {device}")
+        except AttributeError:
+            device = "cpu"
+            _logger.warning("Failed to access 'torch.backends.mps'. Defaulting to 'cpu'.")
+
 
     def _summarize(self, elapsed_time):
         _logger.info(f"[Summary] experiment: {self.name} | path: {self.path}")

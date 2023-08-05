@@ -135,12 +135,12 @@ class AlluxioS3:
             service_name="s3",
             aws_access_key_id="alluxio",  # alluxio user name
             aws_secret_access_key="SK...",  # dummy value
-            endpoint_url="http://" + self.get_worker_host() + ":299998"
+            endpoint_url="http://" + self.get_preferred_worker_host() + ":299998"
             # region = 'us-east-1'
         )
 
-    def get_worker_host(self):
-        return self.workers[0]
+    def get_preferred_worker_host(self):
+        return self.alluxio_workers[0]
 
     def subtract_path(self, path, parent_path):
         if "://" in path and "://" in parent_path:

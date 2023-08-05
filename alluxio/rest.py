@@ -79,7 +79,7 @@ class AlluxioRest:
     ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
     LIST_URL_FORMAT = "http://{worker_host}:28080/v1/files"
     PAGE_URL_FORMAT = (
-        "http://{worker_host}:28080/v1/file/{file_id}/page/{page_index}"
+        "http://{worker_host}:28080/v1/file/{path_id}/page/{page_index}"
     )
 
     def __init__(self, worker_hosts, dora_root, options, concurrency, logger):
@@ -135,7 +135,7 @@ class AlluxioRest:
         def page_generator():
             nonlocal page_index
             while True:
-                page_content = self.read_page(worker_host, file_id, page_index)
+                page_content = self.read_page(worker_host, path_id, page_index)
                 if not page_content:
                     return
                 yield page_content
@@ -146,12 +146,12 @@ class AlluxioRest:
         content = b"".join(page_generator())
         return content
 
-    def read_page(self, worker_host, file_id, page_index):
+    def read_page(self, worker_host, path_id, page_index):
         try:
             response = self.session.get(
                 self.PAGE_URL_FORMAT.format(
                     worker_host=worker_host,
-                    file_id=file_id,
+                    path_id=path_id,
                     page_index=page_index,
                 ),
             )
@@ -159,7 +159,7 @@ class AlluxioRest:
             return response.content
         except requests.exceptions.RequestException as e:
             self.logger.error(
-                f"Error when requesting file {file_id} page {page_index}: error {e}"
+                f"Error when requesting file {path_id} page {page_index}: error {e}"
             )
             return None
 
