@@ -135,7 +135,7 @@ class AlluxioS3:
             service_name="s3",
             aws_access_key_id="alluxio",  # alluxio user name
             aws_secret_access_key="SK...",  # dummy value
-            endpoint_url="http://" + self.get_preferred_worker_host() + ":299998"
+            endpoint_url="http://" + self.get_preferred_worker_host() + ":29998"
             # region = 'us-east-1'
         )
 
