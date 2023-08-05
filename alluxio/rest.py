@@ -61,6 +61,9 @@ class AlluxioRestDataset(Dataset):
         image_content = self.alluxio_rest.read_file(image_path)
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
+            self.logger.info(
+                f"Succeed to get image: {image_path}"
+            )
         except Exception as e:
             self.logger.error(
                 f"Error when decoding image: {image_path}, error: {e}"
