@@ -213,7 +213,7 @@ class BenchmarkRunner:
                 if torch.backends.mps.is_available()
                 else "cpu"
             )
-             _logger.debug(f"Using {device}")
+            _logger.debug(f"Using {device}")
         except AttributeError:
             device = "cpu"
             _logger.warning("Failed to access 'torch.backends.mps'. Defaulting to 'cpu'.")
