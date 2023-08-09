@@ -109,7 +109,7 @@ class AlluxioRest:
             _logger.debug(f"Page size is set to {page_size}")
         else:
             page_size = "1MB"
-        self.page_size = humanfriendly.parse_size(page_size)
+        self.page_size = humanfriendly.parse_size(page_size, binary=True)
 
     def list_dir(self, path):
         path_id = self.get_path_hash(path)
