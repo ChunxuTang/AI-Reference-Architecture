@@ -116,7 +116,7 @@ class AlluxioRest:
 
     def list_dir(self, path):
         path_id = self.get_path_hash(path)
-        worker_host = self.get_preferred_worker_host(path_id)
+        worker_host = self.get_preferred_worker_host(path)
         rel_path = self.subtract_path(path, self.dora_root)
         params = {"path": rel_path}
         try:
@@ -132,7 +132,7 @@ class AlluxioRest:
 
     def read_file(self, file_path):
         path_id = self.get_path_hash(file_path)
-        worker_host = self.get_preferred_worker_host(path_id)
+        worker_host = self.get_preferred_worker_host(file_path)
         page_index = 0
 
         def page_generator():
