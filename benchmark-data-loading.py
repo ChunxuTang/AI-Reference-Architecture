@@ -216,8 +216,9 @@ class BenchmarkRunner:
             _logger.debug(f"Using {device}")
         except AttributeError:
             device = "cpu"
-            _logger.warning("Failed to access 'torch.backends.mps'. Defaulting to 'cpu'.")
-
+            _logger.warning(
+                "Failed to access 'torch.backends.mps'. Defaulting to 'cpu'."
+            )
 
     def _summarize(self, elapsed_time):
         _logger.info(f"[Summary] experiment: {self.name} | path: {self.path}")

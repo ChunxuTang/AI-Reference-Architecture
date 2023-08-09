@@ -65,8 +65,9 @@ class ConsistentHashProvider:
         hash_ring = SortedDict()
         weight = math.ceil(num_virtual_nodes / len(self.worker_addresses))
         for worker_address in self.worker_addresses:
+            worker_string = worker_address.__str__()
             for i in range(weight):
-                hash_key = self.hash(worker_address.__str__(), i)
+                hash_key = self.hash(worker_string, i)
                 hash_ring[hash_key] = worker_address
         self.hash_ring = hash_ring
 
@@ -93,4 +94,4 @@ class ConsistentHashProvider:
             return self.hash_ring.peekitem(0)[1]
 
     def hash(self, key: str, index: int) -> int:
-        return mmh3.hash(f"{key}{index}")
+        return mmh3.hash(f"{key}{index}".encode("utf-8"))

@@ -180,8 +180,9 @@ class AlluxioRest:
             except AttributeError:
                 continue
 
-    def get_preferred_worker_host(self, path_id):
-        workers = self.hash_provider.get_multiple_workers(path_id, 1)
+    def get_preferred_worker_host(self, full_ufs_path):
+        # Java side uses full ufs path as key instead of path hash
+        workers = self.hash_provider.get_multiple_workers(full_ufs_path, 1)
         if len(workers) != 1:
             raise ValueError(
                 "Expected exactly one worker from hash ring, but found {} workers.".format(
