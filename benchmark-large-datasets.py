@@ -7,10 +7,10 @@ Note that replace endpoints localhost to your worker_ip
 POSIX API
 - python3 benchmark-large-datasets.py -a posix -p /mnt/alluxio/fuse/yelp-review/yelp_academic_dataset_review.json
 REST API
-- python3 benchmark-large-datasets.py -a rest -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --alluxioworkers localhost
+- python3 benchmark-large-datasets.py -a alluxio -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --etcd localhost
 - Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
-- python3 benchmark-large-datasets.py -a s3 -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --alluxioworkers localhost
+- python3 benchmark-large-datasets.py -a alluxios3 -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --alluxioworkers localhost
 """
 import argparse
 import logging
@@ -18,8 +18,9 @@ import time
 from enum import Enum
 from logging.config import fileConfig
 
-from alluxio.rest import AlluxioRest
-from alluxio.s3 import AlluxioS3
+from alluxio import AlluxioFileSystem
+
+from datasets.alluxios3 import AlluxioS3
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
@@ -28,9 +29,8 @@ _logger = logging.getLogger("BenchmarkLargeDatasetLoading")
 
 class APIType(Enum):
     POSIX = "posix"
-    REST = "rest"
-    S3 = "s3"
-
+    ALLUXIO = "alluxio"
+    ALLUXIOS3 = "alluxios3"
 
 def parse_options(options_str):
     options_dict = {}
@@ -59,21 +59,26 @@ def get_args():
         "-p",
         "--path",
         help="Local POSIX PATH if API type is POSIX, "
-        "full ufs path if REST/S3 API "
+        "full ufs path if Alluxio/AlluxioS3 API "
         "(e.g.s3://ref-arch/yelp-review/yelp_academic_dataset_review.json)",
         default="./data/yelp-review/yelp_academic_dataset_review.json",
     )
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio REST/S3 API require Dora root ufs address to do path "
+        help="Alluxio/AlluxioS3 API require Dora root ufs address to do path "
         "transformation",
         default="s3://ref-arch/",
     )
     parser.add_argument(
+        "--etcd",
+        help="Alluxio API require ETCD hostname",
+        default="localhost",
+    )
+    parser.add_argument(
         "-aw",
         "--alluxioworkers",
-        help="Alluxio REST/S3 API require worker hostnames in format of host1,host2,host3",
+        help="Alluxio S3 API require worker hostnames in format of host1,host2,host3",
         default="localhost",
     )
     parser.add_argument(
@@ -92,33 +97,34 @@ class BenchmarkLargeDatasetRunner:
         api,
         path,
         dora_root,
+        etcd_host,
         alluxio_workers,
         options,
     ):
         self.api = api
         self.path = path
         self.dora_root = dora_root
+        self.etcd_host = etcd_host
         self.alluxio_workers = alluxio_workers
         self.options = options
 
     def benchmark_data_loading(self):
         start_time = time.perf_counter()
 
-        if self.api == APIType.REST.value:
+        if self.api == APIType.ALLUXIO.value:
             _logger.debug(
-                f"Using alluxio REST API reading file with workers {self.endpoints}, "
+                f"Using alluxio REST API reading file with ETCD {self.etcd_host}, "
                 f"dora root {self.dora_root}, "
-                f"page size {self.page_size}, "
                 f"ufs path {self.path}"
             )
-            alluxio_rest = AlluxioRest(
-                worker_hosts=self.alluxio_workers,
+            alluxio_file_system = AlluxioFileSystem(
+                etcd_host=self.etcd_host,
                 dora_root=self.dora_root,
                 options=self.options,
                 concurrency=1,
                 logger=_logger,
             )
-            alluxio_rest.read_file(self.path)
+            alluxio_file_system.read_file(self.path)
         elif self.api == APIType.POSIX.value:
             _logger.debug(
                 f"Using POSIX API reading file with path {self.path}"
@@ -149,6 +155,7 @@ if __name__ == "__main__":
         api=args.api,
         path=args.path,
         dora_root=args.doraroot,
+        etcd_host=args.etcd,
         alluxio_workers=args.alluxioworkers,
         options=options_dict,
     )

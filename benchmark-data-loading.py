@@ -8,10 +8,10 @@ POSIX API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a posix -p /mnt/alluxio/fuse/imagenet-mini/val
 REST API
-- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a rest -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --etcd localhost
 - Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
-- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a s3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxios3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
 """
 import argparse
 import logging
@@ -22,13 +22,13 @@ from logging.config import fileConfig
 
 import torch
 import torchvision.transforms as transforms
+from alluxio import AlluxioFileSystem
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from alluxio.rest import AlluxioRest
-from alluxio.rest import AlluxioRestDataset
-from alluxio.s3 import AlluxioS3
-from alluxio.s3 import AlluxioS3Dataset
+from datasets.alluxio import AlluxioDataset
+from datasets.alluxios3 import AlluxioS3
+from datasets.alluxios3 import AlluxioS3Dataset
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
@@ -41,9 +41,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class APIType(Enum):
     POSIX = "posix"
-    REST = "rest"
-    S3 = "s3"
-
+    ALLUXIO = "alluxio"
+    ALLUXIOS3 = "alluxios3"
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -73,19 +72,24 @@ def get_args():
         "-p",
         "--path",
         help="Local POSIX PATH if API type is POSIX, full ufs path if "
-        "REST/S3 API (e.g.s3://ref-arch/imagenet-mini/val)",
+        "ALLUXIO/ALLUXIOS3 API (e.g.s3://ref-arch/imagenet-mini/val)",
         default="./data/imagenet-mini/val",
     )
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio REST/S3 API require Dora root ufs address to do path transformation",
+        help="Alluxio/AlluxioS3 API require Dora root ufs address to do path transformation",
         default="s3://ref-arch/",
+    )
+    parser.add_argument(
+        "--etcd",
+        help="Alluxio API require ETCD hostname",
+        default="localhost",
     )
     parser.add_argument(
         "-aw",
         "--alluxioworkers",
-        help="Alluxio REST/S3 API require worker hostnames in format of host1,host2,host3",
+        help="Alluxio S3 API require worker hostnames in format of host1,host2,host3",
         default="localhost",
     )
     parser.add_argument(
@@ -118,6 +122,7 @@ class BenchmarkRunner:
         api,
         path,
         dora_root,
+        etcd_host,
         alluxio_workers,
         options,
     ):
@@ -128,6 +133,7 @@ class BenchmarkRunner:
         self.api = api
         self.path = path
         self.dora_root = dora_root
+        self.etcd_host = etcd_host
         self.alluxio_workers = alluxio_workers
         self.options = options
 
@@ -147,20 +153,19 @@ class BenchmarkRunner:
         )
 
         dataset = None
-        if self.api == APIType.REST.value:
+        if self.api == APIType.ALLUXIO.value:
             _logger.debug(
-                f"Using alluxio REST API dataset with workers {self.alluxio_workers} and ufs path {self.path} "
+                f"Using alluxio dataset with ETCD host {self.etcd_host} and ufs path {self.path} "
             )
-            alluxio_rest = AlluxioRest(
-                worker_hosts=self.alluxio_workers,
+            alluxio_file_system = AlluxioFileSystem(
+                etcd_host=self.etcd_host,
                 dora_root=self.dora_root,
                 options=self.options,
                 concurrency=self.num_workers,
                 logger=_logger,
             )
-
-            dataset = AlluxioRestDataset(
-                alluxio_rest=alluxio_rest,
+            dataset = AlluxioDataset(
+                alluxio_file_system=alluxio_file_system,
                 dataset_path=self.path,
                 transform=transform,
                 logger=_logger,
@@ -240,6 +245,7 @@ if __name__ == "__main__":
         api=args.api,
         path=args.path,
         dora_root=args.doraroot,
+        etcd_host=args.etcd,
         alluxio_workers=args.alluxioworkers,
         options=options_dict,
     )

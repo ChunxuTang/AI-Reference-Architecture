@@ -56,9 +56,7 @@ class AlluxioS3Dataset(Dataset):
         image_content = self.alluxio_s3.read_file(image_path)
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
-            self.logger.info(
-                f"Succeed to get image: {image_path}"
-            )
+            self.logger.info(f"Succeed to get image: {image_path}")
         except Exception as e:
             self.logger.error(
                 f"Error when decoding image: {image_path}, error: {e}"
@@ -138,7 +136,9 @@ class AlluxioS3:
             service_name="s3",
             aws_access_key_id="alluxio",  # alluxio user name
             aws_secret_access_key="SK...",  # dummy value
-            endpoint_url="http://" + self.get_preferred_worker_host() + ":29998"
+            endpoint_url="http://"
+            + self.get_preferred_worker_host()
+            + ":29998"
             # region = 'us-east-1'
         )
 
