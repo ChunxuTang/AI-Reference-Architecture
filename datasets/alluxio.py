@@ -26,7 +26,7 @@ class AlluxioDataset(Dataset):
 
         classes = [
             item["mName"]
-            for item in json.loads(self.alluxio.list_dir(dataset_path))
+            for item in self.alluxio.list_dir(dataset_path)
             if item["mType"] == "directory"
         ]
 
@@ -40,7 +40,7 @@ class AlluxioDataset(Dataset):
             class_path = dataset_path.rstrip("/") + "/" + class_name
             image_names = [
                 item["mName"]
-                for item in json.loads(self.alluxio.list_dir(class_path))
+                for item in self.alluxio.list_dir(class_path)
                 if item["mType"] == "file"
             ]
             for image_name in image_names:

@@ -16,6 +16,7 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
+
 class AlluxioFileSystem:
     ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
     LIST_URL_FORMAT = "http://{worker_host}:28080/v1/files"
@@ -28,11 +29,34 @@ class AlluxioFileSystem:
         self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self._create_session(concurrency)
         self._parse_alluxio_rest_options(options)
-        self.hash_provider = ConsistentHashProvider(
-            etcd_host, self.logger
-        )
+        self.hash_provider = ConsistentHashProvider(etcd_host, self.logger)
+        self.hash_provider.init_worker_ring()
 
     def list_dir(self, path):
+        """
+        Lists the directory.
+
+        Args:
+            path (str): The full ufs path to list from.
+
+        Returns:
+            list of dict: A list containing dictionaries, where each dictionary has:
+                - mType (string): directory or file
+                - nName (string): name of the directory/file.
+
+        Example:
+            [
+                {
+                    "mType": "file",
+                    "nName": "my_file_name"
+                },
+                {
+                    "mType": "directory",
+                    "nName": "my_dir_name"
+                },
+
+            ]
+        """
         path_id = self._get_path_hash(path)
         worker_host = self._get_preferred_worker_host(path)
         rel_path = self._subtract_path(path, self.dora_root)
@@ -43,31 +67,43 @@ class AlluxioFileSystem:
                 params=params,
             )
             response.raise_for_status()
-            return response.content
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error when listing path {rel_path}: error {e}")
-            return None
+            items = json.loads(response.content)
+            print(items)
+            return items
+        except Exception as e:
+            raise type(e)(
+                f"Error when listing full path {path} Alluxio path {rel_path}: error {e}"
+            ) from e
 
     def read_file(self, file_path):
-        path_id = self._get_path_hash(file_path)
+        """
+        Reads a file.
+
+        Args:
+            file_path (str): The full ufs file path to read data from.
+
+        Returns:
+            file content (str): The full file content.
+        """
         worker_host = self._get_preferred_worker_host(file_path)
+        path_id = self._get_path_hash(file_path)
+        try:
+            return b"".join(self._page_generator(worker_host, path_id))
+        except Exception as e:
+            raise type(e)(
+                f"Error when reading file {file_path}: error {e}"
+            ) from e
+
+    def _page_generator(self, worker_host, path_id):
         page_index = 0
-
-        def page_generator():
-            nonlocal page_index
-            while True:
-                page_content = self._read_page(
-                    worker_host, path_id, page_index
-                )
-                if not page_content:
-                    return
-                yield page_content
-                if len(page_content) < self.page_size:  # last page
-                    return
-                page_index += 1
-
-        content = b"".join(page_generator())
-        return content
+        while True:
+            page_content = self._read_page(worker_host, path_id, page_index)
+            if not page_content:
+                break
+            yield page_content
+            if len(page_content) < self.page_size:  # last page
+                break
+            page_index += 1
 
     def _create_session(self, concurrency):
         session = requests.Session()
@@ -97,11 +133,10 @@ class AlluxioFileSystem:
             )
             response.raise_for_status()
             return response.content
-        except requests.exceptions.RequestException as e:
-            self.logger.error(
-                f"Error when requesting file {path_id} page {page_index}: error {e}"
-            )
-            return None
+        except Exception as e:
+            raise type(e)(
+                f"Error when requesting file {path_id} page {page_index} from {worker_host}: error {e}"
+            ) from e
 
     def _get_path_hash(self, uri):
         hash_functions = [
@@ -121,8 +156,8 @@ class AlluxioFileSystem:
         workers = self.hash_provider.get_multiple_workers(full_ufs_path, 1)
         if len(workers) != 1:
             raise ValueError(
-                "Expected exactly one worker from hash ring, but found {} workers.".format(
-                    len(workers)
+                "Expected exactly one worker from hash ring, but found {} workers {}.".format(
+                    len(workers), workers
                 )
             )
         return workers[0].host
