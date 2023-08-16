@@ -1,5 +1,6 @@
 import hashlib
 import io
+import json
 import logging
 import os
 
@@ -67,9 +68,7 @@ class AlluxioFileSystem:
                 params=params,
             )
             response.raise_for_status()
-            items = json.loads(response.content)
-            print(items)
-            return items
+            return json.loads(response.content)
         except Exception as e:
             raise type(e)(
                 f"Error when listing full path {path} Alluxio path {rel_path}: error {e}"
