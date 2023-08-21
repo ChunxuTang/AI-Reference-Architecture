@@ -29,7 +29,13 @@ class AlluxioFileSystem:
         self.dora_root = dora_root
         self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self._create_session(concurrency)
-        self._parse_alluxio_rest_options(options)
+        page_size = None
+        if self.ALLUXIO_PAGE_SIZE_KEY in options:
+            page_size = options[self.ALLUXIO_PAGE_SIZE_KEY]
+            self.logger.debug(f"Page size is set to {page_size}")
+        else:
+            page_size = "1MB"
+        self.page_size = humanfriendly.parse_size(page_size, binary=True)
         self.hash_provider = ConsistentHashProvider(etcd_host, self.logger)
         self.hash_provider.init_worker_ring()
 
@@ -38,22 +44,25 @@ class AlluxioFileSystem:
         Lists the directory.
 
         Args:
-            path (str): The full ufs path to list from.
+            path (str): The full ufs path to list from
 
         Returns:
             list of dict: A list containing dictionaries, where each dictionary has:
                 - mType (string): directory or file
-                - nName (string): name of the directory/file.
+                - mName (string): name of the directory/file
+                - mLength (integer): length of the file or 0 for directory
 
         Example:
             [
                 {
                     "mType": "file",
-                    "nName": "my_file_name"
+                    "mName": "my_file_name",
+                    "mLength": 77542
                 },
                 {
                     "mType": "directory",
-                    "nName": "my_dir_name"
+                    "mName": "my_dir_name",
+                    "mLength": 0
                 },
 
             ]
@@ -79,10 +88,10 @@ class AlluxioFileSystem:
         Reads a file.
 
         Args:
-            file_path (str): The full ufs file path to read data from.
+            file_path (str): The full ufs file path to read data from
 
         Returns:
-            file content (str): The full file content.
+            file content (str): The full file content
         """
         worker_host = self._get_preferred_worker_host(file_path)
         path_id = self._get_path_hash(file_path)
@@ -111,15 +120,6 @@ class AlluxioFileSystem:
         )
         session.mount("http://", adapter)
         return session
-
-    def _parse_alluxio_rest_options(self, options):
-        page_size = None
-        if self.ALLUXIO_PAGE_SIZE_KEY in options:
-            page_size = options[self.ALLUXIO_PAGE_SIZE_KEY]
-            _logger.debug(f"Page size is set to {page_size}")
-        else:
-            page_size = "1MB"
-        self.page_size = humanfriendly.parse_size(page_size, binary=True)
 
     def _read_page(self, worker_host, path_id, page_index):
         try:

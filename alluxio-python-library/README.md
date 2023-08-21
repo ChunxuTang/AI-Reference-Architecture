@@ -15,11 +15,11 @@ pip install dist/alluxio_python_library-0.1-py3-none-any.whl
 from alluxio import AlluxioFileSystem
 
 alluxio_file_system = AlluxioFileSystem(
-                etcd_host=self.etcd_host, # connect to ETCD to get Alluxio worker info
-                dora_root=self.dora_root, # Transform ufs path to dora path
-                options=self.options, # Alluxio property key value pars in format of key1=value1,key2=value2
-                concurrency=self.num_workers, # concurrent requests allowed to Alluxio filesystem
-                logger=_logger,
+            etcd_host=self.etcd_host, # Connect to ETCD to get Alluxio worker info
+            dora_root=self.dora_root, # Transform ufs path to dora path
+            options=self.options, # Alluxio property key value pars in format of key1=value1,key2=value2
+            concurrency=self.num_workers, # Concurrent requests allowed to Alluxio filesystem
+            logger=_logger,
             )
 
 alluxio.list_dir(full_ufs_dataset_path)
