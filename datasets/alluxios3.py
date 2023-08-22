@@ -56,6 +56,7 @@ class AlluxioS3Dataset(Dataset):
         image_content = self.alluxio_s3.read_file(image_path)
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
+            self.logger.info(f"Succeed to get image: {image_path}")
         except Exception as e:
             self.logger.error(
                 f"Error when decoding image: {image_path}, error: {e}"
@@ -70,8 +71,10 @@ class AlluxioS3Dataset(Dataset):
 
 
 class AlluxioS3:
-    def __init__(self, endpoints, dora_root, logger):
-        self.workers = [item.strip() for item in endpoints.split(",")]
+    def __init__(self, alluxio_workers, dora_root, logger):
+        self.alluxio_workers = [
+            item.strip() for item in alluxio_workers.split(",")
+        ]
         self.dora_root = dora_root
         self.logger = logger or logging.getLogger("AlluxioS3")
 
@@ -133,12 +136,14 @@ class AlluxioS3:
             service_name="s3",
             aws_access_key_id="alluxio",  # alluxio user name
             aws_secret_access_key="SK...",  # dummy value
-            endpoint_url="http://" + self.get_worker_address()
+            endpoint_url="http://"
+            + self.get_preferred_worker_host()
+            + ":29998"
             # region = 'us-east-1'
         )
 
-    def get_worker_address(self):
-        return self.workers[0]
+    def get_preferred_worker_host(self):
+        return self.alluxio_workers[0]
 
     def subtract_path(self, path, parent_path):
         if "://" in path and "://" in parent_path:

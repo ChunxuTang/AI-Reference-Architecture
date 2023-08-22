@@ -8,9 +8,10 @@ POSIX API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a posix -p /mnt/alluxio/fuse/imagenet-mini/val
 REST API
-- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a rest -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --endpoints localhost:28080 --pagesize 20MB
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --etcd localhost
+- Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
-- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a s3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --endpoints localhost:29998
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxios3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
 """
 import argparse
 import logging
@@ -21,13 +22,13 @@ from logging.config import fileConfig
 
 import torch
 import torchvision.transforms as transforms
+from alluxio import AlluxioFileSystem
 from torch.utils.data import DataLoader
 from torchvision.datasets import ImageFolder
 
-from alluxio.rest import AlluxioRest
-from alluxio.rest import AlluxioRestDataset
-from alluxio.s3 import AlluxioS3
-from alluxio.s3 import AlluxioS3Dataset
+from datasets.alluxio import AlluxioDataset
+from datasets.alluxios3 import AlluxioS3
+from datasets.alluxios3 import AlluxioS3Dataset
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
@@ -40,9 +41,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 class APIType(Enum):
     POSIX = "posix"
-    REST = "rest"
-    S3 = "s3"
-
+    ALLUXIO = "alluxio"
+    ALLUXIOS3 = "alluxios3"
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -72,30 +72,44 @@ def get_args():
         "-p",
         "--path",
         help="Local POSIX PATH if API type is POSIX, full ufs path if "
-        "REST/S3 API (e.g.s3://ref-arch/imagenet-mini/val)",
+        "ALLUXIO/ALLUXIOS3 API (e.g.s3://ref-arch/imagenet-mini/val)",
         default="./data/imagenet-mini/val",
     )
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio REST/S3 API require Dora root ufs address to do path "
-        "transformation",
+        help="Alluxio/AlluxioS3 API require Dora root ufs address to do path transformation",
         default="s3://ref-arch/",
     )
     parser.add_argument(
-        "--endpoints",
-        help="Alluxio worker REST/S3 endpoints in list of host:port,host2:port2 "
-        "format (e.g. localhost:28080 for REST API, localhost:29998 for "
-        "S3 API)",
-        default="localhost:28080",
+        "--etcd",
+        help="Alluxio API require ETCD hostname",
+        default="localhost",
     )
     parser.add_argument(
-        "--pagesize",
-        help="REST API: Alluxio page size (e.g. 1MB, 4MB, 1024KB)",
-        default="1MB",
+        "-aw",
+        "--alluxioworkers",
+        help="Alluxio S3 API require worker hostnames in format of host1,host2,host3",
+        default="localhost",
+    )
+    parser.add_argument(
+        "-o",
+        "--options",
+        help="Additional Alluxio property key value pars in format of key1=value1,key2=value2",
+        default="",
     )
 
     return parser.parse_args()
+
+
+def parse_options(options_str):
+    options_dict = {}
+    if options_str:
+        key_value_pairs = options_str.split(",")
+        for pair in key_value_pairs:
+            key, value = pair.split("=")
+            options_dict[key.strip()] = value.strip()
+    return options_dict
 
 
 class BenchmarkRunner:
@@ -108,8 +122,9 @@ class BenchmarkRunner:
         api,
         path,
         dora_root,
-        endpoints,
-        page_size,
+        etcd_host,
+        alluxio_workers,
+        options,
     ):
         self.name = name
         self.num_epochs = num_epochs
@@ -118,8 +133,9 @@ class BenchmarkRunner:
         self.api = api
         self.path = path
         self.dora_root = dora_root
-        self.endpoints = endpoints
-        self.page_size = page_size
+        self.etcd_host = etcd_host
+        self.alluxio_workers = alluxio_workers
+        self.options = options
 
     def benchmark_data_loading(self):
         self._check_device()
@@ -137,20 +153,19 @@ class BenchmarkRunner:
         )
 
         dataset = None
-        if self.api == APIType.REST.value:
+        if self.api == APIType.ALLUXIO.value:
             _logger.debug(
-                f"Using alluxio REST API dataset with workers {self.endpoints}, "
-                f"page size {self.page_size}, ufs path {self.path}"
+                f"Using alluxio dataset with ETCD host {self.etcd_host} and ufs path {self.path} "
             )
-            alluxio_rest = AlluxioRest(
-                self.endpoints,
-                self.dora_root,
-                self.page_size,
-                self.num_workers,
-                _logger,
+            alluxio_file_system = AlluxioFileSystem(
+                etcd_host=self.etcd_host,
+                dora_root=self.dora_root,
+                options=self.options,
+                concurrency=self.num_workers,
+                logger=_logger,
             )
-            dataset = AlluxioRestDataset(
-                alluxio_rest=alluxio_rest,
+            dataset = AlluxioDataset(
+                alluxio_file_system=alluxio_file_system,
                 dataset_path=self.path,
                 transform=transform,
                 logger=_logger,
@@ -163,7 +178,7 @@ class BenchmarkRunner:
         else:
             _logger.debug("Using alluxio S3 API dataset")
             alluxio_s3 = AlluxioS3(
-                self.endpoints,
+                self.alluxio_workers,
                 self.dora_root,
                 _logger,
             )
@@ -195,14 +210,20 @@ class BenchmarkRunner:
         self._summarize(end_time - start_time)
 
     def _check_device(self):
-        device = (
-            "cuda"
-            if torch.cuda.is_available()
-            else "mps"
-            if torch.backends.mps.is_available()
-            else "cpu"
-        )
-        _logger.debug(f"Using {device}")
+        try:
+            device = (
+                "cuda"
+                if torch.cuda.is_available()
+                else "mps"
+                if torch.backends.mps.is_available()
+                else "cpu"
+            )
+            _logger.debug(f"Using {device}")
+        except AttributeError:
+            device = "cpu"
+            _logger.warning(
+                "Failed to access 'torch.backends.mps'. Defaulting to 'cpu'."
+            )
 
     def _summarize(self, elapsed_time):
         _logger.info(f"[Summary] experiment: {self.name} | path: {self.path}")
@@ -214,6 +235,7 @@ class BenchmarkRunner:
 
 if __name__ == "__main__":
     args = get_args()
+    options_dict = parse_options(args.options)
 
     benchmark_runner = BenchmarkRunner(
         name=args.name,
@@ -223,7 +245,8 @@ if __name__ == "__main__":
         api=args.api,
         path=args.path,
         dora_root=args.doraroot,
-        endpoints=args.endpoints,
-        page_size=args.pagesize,
+        etcd_host=args.etcd,
+        alluxio_workers=args.alluxioworkers,
+        options=options_dict,
     )
     benchmark_runner.benchmark_data_loading()
