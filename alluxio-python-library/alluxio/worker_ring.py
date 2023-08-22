@@ -149,6 +149,7 @@ class ConsistentHashProvider:
             for i in range(weight):
                 hash_key = self._hash(worker_string, i)
                 hash_ring[hash_key] = worker_address
+        self.worker_addresses = worker_addresses
         self.hash_ring = hash_ring
         self.is_ring_initialized = True
 
@@ -165,6 +166,8 @@ class ConsistentHashProvider:
         Returns:
             List[WorkerNetAddress]: A list containing the desired number of WorkerNetAddress objects.
         """
+        if count >= len(self.worker_addresses):
+            return self.worker_addresses
         workers: Set[WorkerNetAddress] = set()
         attempts = 0
         while len(workers) < count and attempts < self.max_attempts:
@@ -177,7 +180,6 @@ class ConsistentHashProvider:
             raise Exception(
                 "Please initialize the worker ring first using init_worker_ring."
             )
-
         return self._get_ceiling_value(self._hash(key, index))
 
     def _get_ceiling_value(self, hash_key: int):
