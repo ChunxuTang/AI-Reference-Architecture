@@ -85,6 +85,14 @@ class WorkerNetAddress:
                 f"Failed to process given worker_info {worker_info} {e}"
             ) from e
 
+    @staticmethod
+    def from_worker_hosts(worker_hosts):
+        worker_addresses = []
+        for host in worker_hosts.split(","):
+            worker_address = WorkerNetAddress(host=host)
+            worker_addresses.append(worker_address)
+        return worker_addresses
+
     def dump_main_info(self):
         return (
             "WorkerNetAddress{{host={}, containerHost={}, rpcPort={}, dataPort={}, webPort={}, domainSocketPath={}}}"
@@ -128,20 +136,20 @@ class EtcdClient:
 class ConsistentHashProvider:
     def __init__(
         self,
-        etcd_host,
+        worker_addresses,
         logger=None,
         num_virtual_nodes=2000,
         max_attempts=100,
     ):
-        self.etcd_host = etcd_host
+        if worker_addresses is None:
+            raise ValueError(
+                "'worker_addresses' must be provided to form worker hash ring."
+            )
         self.num_virtual_nodes = num_virtual_nodes
         self.max_attempts = max_attempts
         self.logger = logger or logging.getLogger("ConsistentHashProvider")
         self.is_ring_initialized = False
-
-    def init_worker_ring(self):
-        """Initialize the worker ring using worker addresses from Etcd."""
-        worker_addresses = EtcdClient(self.etcd_host).get_worker_addresses()
+        # init worker hash ring
         hash_ring = SortedDict()
         weight = math.ceil(self.num_virtual_nodes / len(worker_addresses))
         for worker_address in worker_addresses:
