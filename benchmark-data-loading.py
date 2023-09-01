@@ -44,6 +44,7 @@ class APIType(Enum):
     ALLUXIO = "alluxio"
     ALLUXIOS3 = "alluxios3"
 
+
 def get_args():
     parser = argparse.ArgumentParser(
         description="Benchmark PyTorch Data Loading on ImageNet Dataset"
@@ -83,7 +84,7 @@ def get_args():
     )
     parser.add_argument(
         "--etcd",
-        help="Alluxio API require ETCD hostname",
+        help="Alluxio API require ETCD hostname or Alluxio worker adddresses --alluxioworkers host1,host2,host3",
         default="localhost",
     )
     parser.add_argument(
@@ -154,16 +155,29 @@ class BenchmarkRunner:
 
         dataset = None
         if self.api == APIType.ALLUXIO.value:
-            _logger.debug(
-                f"Using alluxio dataset with ETCD host {self.etcd_host} and ufs path {self.path} "
-            )
-            alluxio_file_system = AlluxioFileSystem(
-                etcd_host=self.etcd_host,
-                dora_root=self.dora_root,
-                options=self.options,
-                concurrency=self.num_workers,
-                logger=_logger,
-            )
+            alluxio_file_system = None
+            if self.etcd_host is None:
+                _logger.debug(
+                    f"Using alluxio dataset with ETCD host {self.etcd_host} and ufs path {self.path} "
+                )
+                alluxio_file_system = AlluxioFileSystem(
+                    etcd_host=self.etcd_host,
+                    dora_root=self.dora_root,
+                    options=self.options,
+                    concurrency=self.num_workers,
+                    logger=_logger,
+                )
+            else:
+                _logger.debug(
+                    f"Using alluxio dataset with worker address {self.alluxio_workers} and ufs path {self.path} "
+                )
+                alluxio_file_system = AlluxioFileSystem(
+                    worker_hosts=self.alluxio_workers,
+                    dora_root=self.dora_root,
+                    options=self.options,
+                    concurrency=self.num_workers,
+                    logger=_logger,
+                )
             dataset = AlluxioDataset(
                 alluxio_file_system=alluxio_file_system,
                 dataset_path=self.path,

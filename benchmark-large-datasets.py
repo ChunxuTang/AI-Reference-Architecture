@@ -32,6 +32,7 @@ class APIType(Enum):
     ALLUXIO = "alluxio"
     ALLUXIOS3 = "alluxios3"
 
+
 def parse_options(options_str):
     options_dict = {}
     if options_str:
@@ -72,7 +73,7 @@ def get_args():
     )
     parser.add_argument(
         "--etcd",
-        help="Alluxio API require ETCD hostname",
+        help="Alluxio API require ETCD hostname or Alluxio worker adddresses --alluxioworkers host1,host2,host3",
         default="localhost",
     )
     parser.add_argument(
@@ -112,18 +113,33 @@ class BenchmarkLargeDatasetRunner:
         start_time = time.perf_counter()
 
         if self.api == APIType.ALLUXIO.value:
-            _logger.debug(
-                f"Using alluxio REST API reading file with ETCD {self.etcd_host}, "
-                f"dora root {self.dora_root}, "
-                f"ufs path {self.path}"
-            )
-            alluxio_file_system = AlluxioFileSystem(
-                etcd_host=self.etcd_host,
-                dora_root=self.dora_root,
-                options=self.options,
-                concurrency=1,
-                logger=_logger,
-            )
+            alluxio_file_system = None
+            if self.etcd_host is None:
+                _logger.debug(
+                    f"Using alluxio REST API reading file with ETCD {self.etcd_host}, "
+                    f"dora root {self.dora_root}, "
+                    f"ufs path {self.path}"
+                )
+                alluxio_file_system = AlluxioFileSystem(
+                    etcd_host=self.etcd_host,
+                    dora_root=self.dora_root,
+                    options=self.options,
+                    concurrency=1,
+                    logger=_logger,
+                )
+            else:
+                _logger.debug(
+                    f"Using alluxio REST API reading file with worker address {self.alluxio_workers}, "
+                    f"dora root {self.dora_root}, "
+                    f"ufs path {self.path}"
+                )
+                alluxio_file_system = AlluxioFileSystem(
+                    worker_hosts=self.alluxio_workers,
+                    dora_root=self.dora_root,
+                    options=self.options,
+                    concurrency=1,
+                    logger=_logger,
+                )
             alluxio_file_system.read_file(self.path)
         elif self.api == APIType.POSIX.value:
             _logger.debug(

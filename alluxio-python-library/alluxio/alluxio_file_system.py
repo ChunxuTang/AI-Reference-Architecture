@@ -19,25 +19,89 @@ logging.basicConfig(
 
 
 class AlluxioFileSystem:
+    """
+    Access Alluxio file system
+
+    Examples
+    --------
+    >>> alluxio = AlluxioFileSystem(dora_root="s3://mybucket/mypath", etcd_host=localhost)
+    >>> print(alluxio.list_dir("s3://mybucket/mypath/dir"))
+    [
+        {
+            "mType": "file",
+            "mName": "myfile",
+            "mLength": 77542
+        }
+
+    ]
+    >>> print(alluxio.read_file("s3://mybucket/mypath/dir/myfile"))
+    my_file_content
+    """
+
     ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
+    ALLUXIO_PAGE_SIZE_DEFAULT_VALUE = "1MB"
     LIST_URL_FORMAT = "http://{worker_host}:28080/v1/files"
     PAGE_URL_FORMAT = (
         "http://{worker_host}:28080/v1/file/{path_id}/page/{page_index}"
     )
 
-    def __init__(self, etcd_host, dora_root, options, logger, concurrency=64):
+    def __init__(
+        self,
+        dora_root,
+        etcd_host=None,
+        worker_hosts=None,
+        options=None,
+        logger=None,
+        concurrency=64,
+    ):
+        """
+        Inits Alluxio file system.
+
+        Args:
+            dora_root (str):
+                The dora root ufs.
+            etcd_host (str, optional):
+                The hostname of ETCD to get worker addresses from
+                Either etcd_host or worker_hosts should be provided, not both.
+            worker_hosts (str, optional):
+                The worker hostnames in host1,host2,host3 format. Either etcd_host or worker_hosts should be provided, not both.
+            options (dict, optional):
+                A dictionary of Alluxio property key and values.
+                Note that Alluxio Python API only support a limited set of Alluxio properties.
+            logger (Logger, optional):
+                A logger instance for logging messages.
+            concurrency (int, optional):
+                The maximum number of concurrent operations. Default to 64.
+        """
+        if dora_root is None:
+            raise ValueError("Must supply 'dora_root'")
+        if etcd_host is None and worker_hosts is None:
+            raise ValueError(
+                "Must supply either 'etcd_host' or 'worker_hosts'"
+            )
+        if etcd_host and worker_hosts:
+            raise ValueError(
+                "Supply either 'etcd_host' or 'worker_hosts', not both"
+            )
         self.dora_root = dora_root
         self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self._create_session(concurrency)
-        page_size = None
-        if self.ALLUXIO_PAGE_SIZE_KEY in options:
-            page_size = options[self.ALLUXIO_PAGE_SIZE_KEY]
-            self.logger.debug(f"Page size is set to {page_size}")
-        else:
-            page_size = "1MB"
+        # parse options
+        page_size = self.ALLUXIO_PAGE_SIZE_DEFAULT_VALUE
+        if options:
+            if self.ALLUXIO_PAGE_SIZE_KEY in options:
+                page_size = options[self.ALLUXIO_PAGE_SIZE_KEY]
+                self.logger.debug(f"Page size is set to {page_size}")
         self.page_size = humanfriendly.parse_size(page_size, binary=True)
-        self.hash_provider = ConsistentHashProvider(etcd_host, self.logger)
-        self.hash_provider.init_worker_ring()
+        # parse worker info to form hash ring
+        worker_addresses = None
+        if etcd_host:
+            worker_addresses = EtcdClient(etcd_host).get_worker_addresses()
+        else:
+            worker_addresses = WorkerNetAddress.from_worker_hosts(worker_hosts)
+        self.hash_provider = ConsistentHashProvider(
+            worker_addresses, self.logger
+        )
 
     def list_dir(self, path):
         """
