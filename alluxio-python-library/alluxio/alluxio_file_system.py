@@ -39,6 +39,7 @@ class AlluxioFileSystem:
     """
 
     ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
+    ALLUXIO_PAGE_SIZE_DEFAULT_VALUE = "1MB"
     LIST_URL_FORMAT = "http://{worker_host}:28080/v1/files"
     PAGE_URL_FORMAT = (
         "http://{worker_host}:28080/v1/file/{path_id}/page/{page_index}"
@@ -86,7 +87,7 @@ class AlluxioFileSystem:
         self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self._create_session(concurrency)
         # parse options
-        page_size = "1MB"
+        page_size = self.ALLUXIO_PAGE_SIZE_DEFAULT_VALUE
         if options:
             if self.ALLUXIO_PAGE_SIZE_KEY in options:
                 page_size = options[self.ALLUXIO_PAGE_SIZE_KEY]
