@@ -8,7 +8,8 @@ POSIX API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a posix -p /mnt/alluxio/fuse/imagenet-mini/val
 REST API
-- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --etcd localhost
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val --etcd localhost
+- python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val --alluxioworkers host1,host2
 - Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxios3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
@@ -79,7 +80,7 @@ def get_args():
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio/AlluxioS3 API require Dora root ufs address to do path transformation",
+        help="AlluxioS3 API require Dora root ufs address to do path transformation",
         default="s3://ref-arch/",
     )
     parser.add_argument(
@@ -162,7 +163,6 @@ class BenchmarkRunner:
                 )
                 alluxio_file_system = AlluxioFileSystem(
                     etcd_host=self.etcd_host,
-                    dora_root=self.dora_root,
                     options=self.options,
                     concurrency=self.num_workers,
                     logger=_logger,
@@ -173,7 +173,6 @@ class BenchmarkRunner:
                 )
                 alluxio_file_system = AlluxioFileSystem(
                     worker_hosts=self.alluxio_workers,
-                    dora_root=self.dora_root,
                     options=self.options,
                     concurrency=self.num_workers,
                     logger=_logger,

@@ -7,7 +7,8 @@ Note that replace endpoints localhost to your worker_ip
 POSIX API
 - python3 benchmark-large-datasets.py -a posix -p /mnt/alluxio/fuse/yelp-review/yelp_academic_dataset_review.json
 REST API
-- python3 benchmark-large-datasets.py -a alluxio -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --etcd localhost
+- python3 benchmark-large-datasets.py -a alluxio -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json --etcd localhost
+- python3 benchmark-large-datasets.py -a alluxio -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json --alluxioworkers host1,host2
 - Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
 - python3 benchmark-large-datasets.py -a alluxios3 -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --alluxioworkers localhost
@@ -67,7 +68,7 @@ def get_args():
     parser.add_argument(
         "-d",
         "--doraroot",
-        help="Alluxio/AlluxioS3 API require Dora root ufs address to do path "
+        help="AlluxioS3 API require Dora root ufs address to do path "
         "transformation",
         default="s3://ref-arch/",
     )
@@ -122,7 +123,6 @@ class BenchmarkLargeDatasetRunner:
                 )
                 alluxio_file_system = AlluxioFileSystem(
                     etcd_host=self.etcd_host,
-                    dora_root=self.dora_root,
                     options=self.options,
                     concurrency=1,
                     logger=_logger,
@@ -135,12 +135,11 @@ class BenchmarkLargeDatasetRunner:
                 )
                 alluxio_file_system = AlluxioFileSystem(
                     worker_hosts=self.alluxio_workers,
-                    dora_root=self.dora_root,
                     options=self.options,
                     concurrency=1,
                     logger=_logger,
                 )
-            alluxio_file_system.read_file(self.path)
+            alluxio_file_system.read(self.path)
         elif self.api == APIType.POSIX.value:
             _logger.debug(
                 f"Using POSIX API reading file with path {self.path}"
@@ -157,7 +156,7 @@ class BenchmarkLargeDatasetRunner:
                 self.dora_root,
                 _logger,
             )
-            alluxio_s3.read_file(self.path)
+            alluxio_s3.read(self.path)
 
         end_time = time.perf_counter()
         _logger.info(f"Data loading in {end_time - start_time:0.4f} seconds")

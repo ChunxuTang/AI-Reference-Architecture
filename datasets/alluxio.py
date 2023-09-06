@@ -26,7 +26,7 @@ class AlluxioDataset(Dataset):
 
         classes = [
             item["mName"]
-            for item in self.alluxio.list_dir(dataset_path)
+            for item in self.alluxio.listdir(dataset_path)
             if item["mType"] == "directory"
         ]
 
@@ -40,7 +40,7 @@ class AlluxioDataset(Dataset):
             class_path = dataset_path.rstrip("/") + "/" + class_name
             image_names = [
                 item["mName"]
-                for item in self.alluxio.list_dir(class_path)
+                for item in self.alluxio.listdir(class_path)
                 if item["mType"] == "file"
             ]
             for image_name in image_names:
@@ -56,7 +56,7 @@ class AlluxioDataset(Dataset):
 
     def __getitem__(self, index):
         image_path, class_name = self.data[index]
-        image_content = self.alluxio.read_file(image_path)
+        image_content = self.alluxio.read(image_path)
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
         except Exception as e:
