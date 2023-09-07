@@ -1,4 +1,5 @@
 import json
+import logging
 import math
 from typing import List
 from typing import Set
@@ -73,15 +74,15 @@ class WorkerNetAddress:
                 ),
             )
         except json.JSONDecodeError as e:
-            raise type(e)(
+            raise ValueError(
                 f"Provided worker_info is not a valid JSON string {e}"
             ) from e
         except AttributeError as e:
-            raise type(e)(
+            raise AttributeError(
                 f"Provided worker_info must be a bytes-like object {e}"
             ) from e
         except Exception as e:
-            raise type(e)(
+            raise Exception(
                 f"Failed to process given worker_info {worker_info} {e}"
             ) from e
 
@@ -128,7 +129,7 @@ class EtcdClient:
                 for worker_info, _ in etcd.get_prefix(self.PREFIX)
             ]
         except Exception as e:
-            raise type(e)(
+            raise Exception(
                 f"Failed to achieve worker info list from ETCD server {self.host}:{self.port} {e}"
             ) from e
 
