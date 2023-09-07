@@ -29,7 +29,7 @@ class AlluxioFileSystem:
     >>> # Or launch Alluxio with user provided worker list
     >>> alluxio = AlluxioFileSystem(worker_hosts="host1,host2,host3")
 
-    >>> print(alluxio.list_dir("s3://mybucket/mypath/dir"))
+    >>> print(alluxio.listdir("s3://mybucket/mypath/dir"))
     [
         {
             "mType": "file",
@@ -38,7 +38,7 @@ class AlluxioFileSystem:
         }
 
     ]
-    >>> print(alluxio.read_file("s3://mybucket/mypath/dir/myfile"))
+    >>> print(alluxio.read("s3://mybucket/mypath/dir/myfile"))
     my_file_content
     """
 
