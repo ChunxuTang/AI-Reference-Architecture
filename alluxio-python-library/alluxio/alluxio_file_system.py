@@ -24,8 +24,12 @@ class AlluxioFileSystem:
 
     Examples
     --------
-    >>> alluxio = AlluxioFileSystem(dora_root="s3://mybucket/mypath", etcd_host=localhost)
-    >>> print(alluxio.list_dir("s3://mybucket/mypath/dir"))
+    >>> # Launch Alluxio with ETCD as service discovery
+    >>> alluxio = AlluxioFileSystem(etcd_host=localhost)
+    >>> # Or launch Alluxio with user provided worker list
+    >>> alluxio = AlluxioFileSystem(worker_hosts="host1,host2,host3")
+
+    >>> print(alluxio.listdir("s3://mybucket/mypath/dir"))
     [
         {
             "mType": "file",
@@ -34,7 +38,7 @@ class AlluxioFileSystem:
         }
 
     ]
-    >>> print(alluxio.read_file("s3://mybucket/mypath/dir/myfile"))
+    >>> print(alluxio.read("s3://mybucket/mypath/dir/myfile"))
     my_file_content
     """
 
@@ -47,7 +51,6 @@ class AlluxioFileSystem:
 
     def __init__(
         self,
-        dora_root,
         etcd_host=None,
         worker_hosts=None,
         options=None,
@@ -58,8 +61,6 @@ class AlluxioFileSystem:
         Inits Alluxio file system.
 
         Args:
-            dora_root (str):
-                The dora root ufs.
             etcd_host (str, optional):
                 The hostname of ETCD to get worker addresses from
                 Either etcd_host or worker_hosts should be provided, not both.
@@ -73,8 +74,6 @@ class AlluxioFileSystem:
             concurrency (int, optional):
                 The maximum number of concurrent operations. Default to 64.
         """
-        if dora_root is None:
-            raise ValueError("Must supply 'dora_root'")
         if etcd_host is None and worker_hosts is None:
             raise ValueError(
                 "Must supply either 'etcd_host' or 'worker_hosts'"
@@ -83,7 +82,6 @@ class AlluxioFileSystem:
             raise ValueError(
                 "Supply either 'etcd_host' or 'worker_hosts', not both"
             )
-        self.dora_root = dora_root
         self.logger = logger or logging.getLogger("AlluxioRest")
         self.session = self._create_session(concurrency)
         # parse options
@@ -103,7 +101,7 @@ class AlluxioFileSystem:
             worker_addresses, self.logger
         )
 
-    def list_dir(self, path):
+    def listdir(self, path):
         """
         Lists the directory.
 
@@ -133,8 +131,7 @@ class AlluxioFileSystem:
         """
         path_id = self._get_path_hash(path)
         worker_host = self._get_preferred_worker_host(path)
-        rel_path = self._subtract_path(path, self.dora_root)
-        params = {"path": rel_path}
+        params = {"path": path}
         try:
             response = self.session.get(
                 self.LIST_URL_FORMAT.format(worker_host=worker_host),
@@ -143,11 +140,9 @@ class AlluxioFileSystem:
             response.raise_for_status()
             return json.loads(response.content)
         except Exception as e:
-            raise type(e)(
-                f"Error when listing full path {path} Alluxio path {rel_path}: error {e}"
-            ) from e
+            raise type(e)(f"Error when listing path {path}: error {e}") from e
 
-    def read_file(self, file_path):
+    def read(self, file_path):
         """
         Reads a file.
 
@@ -224,13 +219,3 @@ class AlluxioFileSystem:
                 )
             )
         return workers[0].host
-
-    def _subtract_path(self, path, parent_path):
-        if "://" in path and "://" in parent_path:
-            # Remove the parent_path from path
-            relative_path = path[len(parent_path) :]
-        else:
-            # Get the relative path for local paths
-            relative_path = os.path.relpath(path, start=parent_path)
-            relative_path = "/" + relative_path
-        return relative_path

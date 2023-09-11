@@ -20,7 +20,7 @@ class AlluxioS3Dataset(Dataset):
         self.logger = logger or logging.getLogger("AlluxioS3Dataset")
         self.data = []
 
-        list_result = self.alluxio_s3.list_objects(dataset_path)
+        list_result = self.alluxio_s3.listdir(dataset_path)
 
         all_paths = [path_info.get("Key") for path_info in list_result]
         # Initialize an empty set to store unique classes and a list to store images
@@ -53,7 +53,7 @@ class AlluxioS3Dataset(Dataset):
 
     def __getitem__(self, index):
         image_path, class_name = self.data[index]
-        image_content = self.alluxio_s3.read_file(image_path)
+        image_content = self.alluxio_s3.read(image_path)
         try:
             image = Image.open(io.BytesIO(image_content)).convert("RGB")
             self.logger.info(f"Succeed to get image: {image_path}")
@@ -78,7 +78,7 @@ class AlluxioS3:
         self.dora_root = dora_root
         self.logger = logger or logging.getLogger("AlluxioS3")
 
-    def list_objects(self, full_path):
+    def listdir(self, full_path):
         objects = []
         s3 = self.get_s3_client()
         bucket, path = self.get_bucket_path(full_path)
@@ -102,7 +102,7 @@ class AlluxioS3:
 
         return objects
 
-    def read_file(self, full_path):
+    def read(self, full_path):
         # TODO can S3 client be shared
         bucket, path = self.get_bucket_path(full_path)
         try:
