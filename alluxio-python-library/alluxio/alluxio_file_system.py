@@ -44,9 +44,9 @@ class AlluxioFileSystem:
 
     ALLUXIO_PAGE_SIZE_KEY = "alluxio.worker.page.store.page.size"
     ALLUXIO_PAGE_SIZE_DEFAULT_VALUE = "1MB"
-    LIST_URL_FORMAT = "http://{worker_host}:28080/v1/files"
+    LIST_URL_FORMAT = "http://{worker_host}:{http_port}/v1/files"
     PAGE_URL_FORMAT = (
-        "http://{worker_host}:28080/v1/file/{path_id}/page/{page_index}"
+        "http://{worker_host}:{http_port}/v1/file/{path_id}/page/{page_index}"
     )
 
     def __init__(
@@ -56,6 +56,7 @@ class AlluxioFileSystem:
         options=None,
         logger=None,
         concurrency=64,
+        http_port="28080",
     ):
         """
         Inits Alluxio file system.
@@ -73,6 +74,8 @@ class AlluxioFileSystem:
                 A logger instance for logging messages.
             concurrency (int, optional):
                 The maximum number of concurrent operations. Default to 64.
+            http_port (string, optional):
+                The port of the HTTP server on each Alluxio worker node.
         """
         if etcd_host is None and worker_hosts is None:
             raise ValueError(
@@ -82,7 +85,7 @@ class AlluxioFileSystem:
             raise ValueError(
                 "Supply either 'etcd_host' or 'worker_hosts', not both"
             )
-        self.logger = logger or logging.getLogger("AlluxioRest")
+        self.logger = logger or logging.getLogger("AlluxioFileSystem")
         self.session = self._create_session(concurrency)
         # parse options
         page_size = self.ALLUXIO_PAGE_SIZE_DEFAULT_VALUE
@@ -100,6 +103,7 @@ class AlluxioFileSystem:
         self.hash_provider = ConsistentHashProvider(
             worker_addresses, self.logger
         )
+        self.http_port = http_port
 
     def listdir(self, path):
         """
@@ -134,7 +138,9 @@ class AlluxioFileSystem:
         params = {"path": path}
         try:
             response = self.session.get(
-                self.LIST_URL_FORMAT.format(worker_host=worker_host),
+                self.LIST_URL_FORMAT.format(
+                    worker_host=worker_host, http_port=self.http_port
+                ),
                 params=params,
             )
             response.raise_for_status()
@@ -185,6 +191,7 @@ class AlluxioFileSystem:
             response = self.session.get(
                 self.PAGE_URL_FORMAT.format(
                     worker_host=worker_host,
+                    http_port=self.http_port,
                     path_id=path_id,
                     page_index=page_index,
                 ),
