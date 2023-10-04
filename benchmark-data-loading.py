@@ -7,12 +7,14 @@ Example usage:
 POSIX API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a posix -p /mnt/alluxio/fuse/imagenet-mini/val
-REST API
+ALLUXIO REST API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val --etcd localhost
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val --alluxioworkers host1,host2
 - Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
-S3 API
+ALLUXIO S3 API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxios3 -p s3://ref-arch/imagenet-mini/val -d s3://ref-arch/ --alluxioworkers localhost
+S3 API
+- - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a s3 -p s3://ref-arch/imagenet-mini/val
 """
 import argparse
 import logging
@@ -21,6 +23,7 @@ import warnings
 from enum import Enum
 from logging.config import fileConfig
 
+import boto3
 import torch
 import torchvision.transforms as transforms
 from alluxio import AlluxioFileSystem
@@ -30,6 +33,7 @@ from torchvision.datasets import ImageFolder
 from datasets.alluxio import AlluxioDataset
 from datasets.alluxios3 import AlluxioS3
 from datasets.alluxios3 import AlluxioS3Dataset
+from datasets.s3 import S3ImageDataset
 
 log_conf_path = "./conf/logging.conf"
 fileConfig(log_conf_path, disable_existing_loggers=True)
@@ -44,6 +48,7 @@ class APIType(Enum):
     POSIX = "posix"
     ALLUXIO = "alluxio"
     ALLUXIOS3 = "alluxios3"
+    S3 = "s3"
 
 
 def get_args():
@@ -188,7 +193,7 @@ class BenchmarkRunner:
                 f"Using POSIX API ImageFolder dataset with path {self.path}"
             )
             dataset = ImageFolder(root=self.path, transform=transform)
-        else:
+        elif self.api == APIType.ALLUXIOS3.value:
             _logger.debug("Using alluxio S3 API dataset")
             alluxio_s3 = AlluxioS3(
                 self.alluxio_workers,
@@ -201,6 +206,12 @@ class BenchmarkRunner:
                 transform=transform,
                 logger=_logger,
             )
+        else:
+            s3 = boto3.client("s3")
+            # For MINIO，please change to something similar to
+            # s3 = boto3.client('s3', endpoint_url='http://10.0.6.242:9000', aws_access_key_id='minioadmin', aws_secret_access_key='minioadmin', verify=False)
+            bucket_name, prefix = self._parse_s3_path(self.path)
+            dataset = S3ImageDataset(s3, bucket_name, prefix, transform)
 
         loader = DataLoader(
             dataset,
@@ -244,6 +255,16 @@ class BenchmarkRunner:
             f"num_epochs: {self.num_epochs} | batch_size: {self.batch_size} | "
             f"num_workers: {self.num_workers} | time: {elapsed_time:0.4f}"
         )
+
+    def _parse_s3_path(self, s3_path):
+        assert s3_path.startswith(
+            "s3://"
+        ), "The provided path is not a valid S3 path."
+        path_without_scheme = s3_path[5:]
+        parts = path_without_scheme.split("/", 1)
+        bucket_name = parts[0]
+        prefix = parts[1] if len(parts) > 1 else ""
+        return bucket_name, prefix
 
 
 if __name__ == "__main__":
