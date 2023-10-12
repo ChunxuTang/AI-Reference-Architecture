@@ -9,6 +9,7 @@ POSIX API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a posix -p /mnt/alluxio/fuse/imagenet-mini/val
 REST API
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val --etcd localhost
+- Configure ETCD user,password add -o alluxio.etcd.username=alluxio,alluxio.etcd.password=alluxio
 - python3 benchmark-data-loading.py -e 5 -b 128 -w 16 -a alluxio -p s3://ref-arch/imagenet-mini/val --alluxioworkers host1,host2
 - Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API

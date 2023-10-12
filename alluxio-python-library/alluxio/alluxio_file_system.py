@@ -87,6 +87,7 @@ class AlluxioFileSystem:
             )
         self.logger = logger or logging.getLogger("AlluxioFileSystem")
         self.session = self._create_session(concurrency)
+
         # parse options
         page_size = self.ALLUXIO_PAGE_SIZE_DEFAULT_VALUE
         if options:
@@ -94,10 +95,13 @@ class AlluxioFileSystem:
                 page_size = options[self.ALLUXIO_PAGE_SIZE_KEY]
                 self.logger.debug(f"Page size is set to {page_size}")
         self.page_size = humanfriendly.parse_size(page_size, binary=True)
+
         # parse worker info to form hash ring
         worker_addresses = None
         if etcd_host:
-            worker_addresses = EtcdClient(etcd_host).get_worker_addresses()
+            worker_addresses = EtcdClient(
+                etcd_host, options
+            ).get_worker_addresses()
         else:
             worker_addresses = WorkerNetAddress.from_worker_hosts(worker_hosts)
         self.hash_provider = ConsistentHashProvider(
