@@ -109,10 +109,25 @@ class WorkerNetAddress:
 
 class EtcdClient:
     PREFIX = "/DHT/DefaultAlluxioCluster/AUTHORIZED/"
+    ALLUXIO_ETCD_USERNAME = "alluxio.etcd.username"
+    ALLUXIO_ETCD_PASSWORD = "alluxio.etcd.password"
 
-    def __init__(self, host="localhost", port=2379):
+    def __init__(self, host="localhost", port=2379, options=None):
         self.host = host
         self.port = port
+
+        # Parse options
+        self.etcd_username = None
+        self.etcd_password = None
+        if options:
+            if self.ALLUXIO_ETCD_USERNAME in options:
+                self.etcd_username = options[self.ALLUXIO_ETCD_USERNAME]
+            if self.ALLUXIO_ETCD_PASSWORD in options:
+                self.etcd_password = options[self.ALLUXIO_ETCD_PASSWORD]
+        if (self.etcd_username is None) != (self.etcd_password is None):
+            raise ValueError(
+                "Both ETCD username and password must be set or both should be unset."
+            )
 
     def get_worker_addresses(self):
         """
@@ -122,7 +137,7 @@ class EtcdClient:
             list: A list of WorkerNetAddress objects.
         """
         # Note that EtcdClient should not be passed through python multiprocessing
-        etcd = etcd3.client(host=self.host, port=self.port)
+        etcd = self._get_etcd_client()
         try:
             return [
                 WorkerNetAddress.from_worker_info(worker_info)
@@ -132,6 +147,16 @@ class EtcdClient:
             raise Exception(
                 f"Failed to achieve worker info list from ETCD server {self.host}:{self.port} {e}"
             ) from e
+
+    def _get_etcd_client(self):
+        if self.etcd_username:
+            return etcd3.client(
+                host=self.host,
+                port=self.port,
+                user=self.etcd_username,
+                password=self.etcd_password,
+            )
+        return etcd3.client(host=self.host, port=self.port)
 
 
 class ConsistentHashProvider:

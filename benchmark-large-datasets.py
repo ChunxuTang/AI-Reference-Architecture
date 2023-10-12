@@ -9,6 +9,7 @@ POSIX API
 REST API
 - python3 benchmark-large-datasets.py -a alluxio -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json --etcd localhost
 - python3 benchmark-large-datasets.py -a alluxio -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json --alluxioworkers host1,host2
+- Configure ETCD user,password add -o alluxio.etcd.username=alluxio,alluxio.etcd.password=alluxio
 - Configure a different page size, add -o alluxio.worker.page.store.page.size=20MB
 S3 API
 - python3 benchmark-large-datasets.py -a alluxios3 -p s3://ref-arch/yelp-review/yelp_academic_dataset_review.json -d s3://ref-arch/ --alluxioworkers localhost

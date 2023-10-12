@@ -45,8 +45,18 @@ alluxio = AlluxioFileSystem(worker_hosts="worker_host1,worker_host2")
 # Minimum setup for Alluxio with self-defined page size
 alluxio = AlluxioFileSystem(
             etcd_host="localhost",
-            options="alluxio.worker.page.store.page.size=20MB"
+            options={"alluxio.worker.page.store.page.size": "20MB"}
             )
+# Minimum setup for Alluxio with ETCD membership service with username/password
+options = {
+    "alluxio.etcd.username": "my_user",
+    "alluxio.etcd.password": "my_password",
+    "alluxio.worker.page.store.page.size": "20MB"  # Any other options should be included here
+}
+alluxio = AlluxioFileSystem(
+    etcd_host="localhost",
+    options=options
+)
 ```
 
 List directory
