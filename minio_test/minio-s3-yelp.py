@@ -24,22 +24,23 @@ def upload(s3_client, dataset, dataset_prefix):
                 print(f"Uploaded: {s3_object_key}")
 
 
-s3 = boto3.resource(
-    "s3",
-    endpoint_url="http://10.0.6.242:9000",
-    aws_access_key_id="minioadmin",
-    aws_secret_access_key="minioadmin",
-    verify=False,
-)
-bucket_name = "ai-ref"
-s3b = s3.Bucket(bucket_name)
-upload(
-    s3b,
-    "/AI-Reference-Architecture/data/imagenet-mini/train",
-    "imagenet-mini/train",
-)
-upload(
-    s3b,
-    "/AI-Reference-Architecture/data/imagenet-mini/val",
-    "imagenet-mini/val",
-)
+if __name__ == "__main__":
+    s3 = boto3.resource(
+        "s3",
+        endpoint_url="http://10.0.6.242:9000",
+        aws_access_key_id="minioadmin",
+        aws_secret_access_key="minioadmin",
+        verify=False,
+    )
+    bucket_name = "ai-ref"
+    s3b = s3.Bucket(bucket_name)
+    upload(
+        s3b,
+        "/AI-Reference-Architecture/data/imagenet-mini/train",
+        "imagenet-mini/train",
+    )
+    upload(
+        s3b,
+        "/AI-Reference-Architecture/data/imagenet-mini/val",
+        "imagenet-mini/val",
+    )
