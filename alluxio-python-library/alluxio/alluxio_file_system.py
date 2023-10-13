@@ -165,13 +165,38 @@ class AlluxioFileSystem:
         worker_host = self._get_preferred_worker_host(file_path)
         path_id = self._get_path_hash(file_path)
         try:
-            return b"".join(self._page_generator(worker_host, path_id))
+            return b"".join(self._all_page_generator(worker_host, path_id))
         except Exception as e:
             raise type(e)(
                 f"Error when reading file {file_path}: error {e}"
             ) from e
 
-    def _page_generator(self, worker_host, path_id):
+    def read_range(self, file_path, offset, length):
+        """
+        Reads parts of a file.
+
+        Args:
+            file_path (str): The full ufs file path to read data from
+            offset (integer): The offset to start reading data from
+            length (integer): The file length to read
+
+        Returns:
+            file content (str): The file content with length from offset
+        """
+        worker_host = self._get_preferred_worker_host(file_path)
+        path_id = self._get_path_hash(file_path)
+        try:
+            return b"".join(
+                self._range_page_generator(
+                    worker_host, path_id, offset, length
+                )
+            )
+        except Exception as e:
+            raise type(e)(
+                f"Error when reading file {file_path}: error {e}"
+            ) from e
+
+    def _all_page_generator(self, worker_host, path_id):
         page_index = 0
         while True:
             page_content = self._read_page(worker_host, path_id, page_index)
@@ -181,6 +206,27 @@ class AlluxioFileSystem:
             if len(page_content) < self.page_size:  # last page
                 break
             page_index += 1
+
+    def _range_page_generator(self, worker_host, path_id, offset, length):
+        start_page_index = offset // self.page_size
+        end_page_index = (offset + length - 1) // self.page_size
+        start_page_offset = offset % self.page_size
+        end_page_read_to = ((offset + length - 1) % self.page_size) + 1
+
+        for page_index in range(start_page_index, end_page_index + 1):
+            page_content = self._read_page(worker_host, path_id, page_index)
+
+            # If we're on the first page, start from the calculated offset
+            if page_index == start_page_index:
+                page_content = page_content[start_page_offset:]
+            if page_index == end_page_index:
+                yield page_content[:end_page_read_to]
+                break
+            elif len(page_content) < self.page_size:
+                yield page_content
+                break
+
+            yield page_content
 
     def _create_session(self, concurrency):
         session = requests.Session()
