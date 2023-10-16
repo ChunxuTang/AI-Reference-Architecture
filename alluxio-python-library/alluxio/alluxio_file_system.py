@@ -100,7 +100,7 @@ class AlluxioFileSystem:
         worker_addresses = None
         if etcd_host:
             worker_addresses = EtcdClient(
-                etcd_host, options
+                host=etcd_host, options=options
             ).get_worker_addresses()
         else:
             worker_addresses = WorkerNetAddress.from_worker_hosts(worker_hosts)
