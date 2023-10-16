@@ -1,18 +1,21 @@
-import boto3
 import io
+
+import boto3
 from PIL import Image
 from torch.utils.data import Dataset
 
 
 class S3ImageDataset(Dataset):
-    def __init__(self, s3_bucket, s3_prefix, transform):
+    def __init__(self, s3_client, s3_bucket, s3_prefix, transform):
+        self.s3_client = s3_client
         self.s3_bucket = s3_bucket
         self.transform = transform
-        bucket = boto3.resource("s3").Bucket(self.s3_bucket)
-        s3_objects = bucket.objects.filter(Prefix=s3_prefix)
-        s3_image_paths = [
-            obj.key for obj in s3_objects if obj.key.endswith(".JPEG")
-        ]
+        paginator = s3_client.get_paginator("list_objects_v2")
+        s3_image_paths = []
+        for page in paginator.paginate(Bucket=s3_bucket, Prefix=s3_prefix):
+            for obj in page.get("Contents", []):
+                if obj["Key"].endswith(".JPEG"):
+                    s3_image_paths.append(obj["Key"])
 
         classes = set()
         self.data = []
@@ -35,7 +38,7 @@ class S3ImageDataset(Dataset):
 
     def __getitem__(self, idx):
         s3_path, class_name = self.data[idx]
-        s3_image_object = boto3.client("s3").get_object(
+        s3_image_object = self.s3_client.get_object(
             Bucket=self.s3_bucket, Key=s3_path
         )
         image_data = s3_image_object["Body"].read()
