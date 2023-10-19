@@ -100,7 +100,7 @@ class AlluxioFileSystem:
         worker_addresses = None
         if etcd_host:
             worker_addresses = EtcdClient(
-                etcd_host, options
+                host=etcd_host, options=options
             ).get_worker_addresses()
         else:
             worker_addresses = WorkerNetAddress.from_worker_hosts(worker_hosts)
@@ -215,11 +215,14 @@ class AlluxioFileSystem:
 
         for page_index in range(start_page_index, end_page_index + 1):
             page_content = self._read_page(worker_host, path_id, page_index)
-
-            # If we're on the first page, start from the calculated offset
             if page_index == start_page_index:
-                page_content = page_content[start_page_offset:]
-            if page_index == end_page_index:
+                if start_page_index == end_page_index:
+                    page_content = page_content[
+                        start_page_offset:end_page_read_to
+                    ]
+                else:
+                    page_content = page_content[start_page_offset:]
+            elif page_index == end_page_index:
                 yield page_content[:end_page_read_to]
                 break
             elif len(page_content) < self.page_size:

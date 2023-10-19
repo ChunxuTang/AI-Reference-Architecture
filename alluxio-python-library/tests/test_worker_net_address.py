@@ -1,4 +1,5 @@
 import pytest
+
 from alluxio.worker_ring import WorkerNetAddress
 
 
