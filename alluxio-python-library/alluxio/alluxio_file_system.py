@@ -3,6 +3,7 @@ import io
 import json
 import logging
 import os
+import re
 
 import humanfriendly
 import requests
@@ -137,6 +138,7 @@ class AlluxioFileSystem:
 
             ]
         """
+        self._validate_path(path)
         path_id = self._get_path_hash(path)
         worker_host = self._get_preferred_worker_host(path)
         params = {"path": path}
@@ -150,7 +152,7 @@ class AlluxioFileSystem:
             response.raise_for_status()
             return json.loads(response.content)
         except Exception as e:
-            raise type(e)(f"Error when listing path {path}: error {e}") from e
+            raise Exception(f"Error when listing path {path}: error {e}") from e
 
     def read(self, file_path):
         """
@@ -162,12 +164,13 @@ class AlluxioFileSystem:
         Returns:
             file content (str): The full file content
         """
+        self._validate_path(file_path)
         worker_host = self._get_preferred_worker_host(file_path)
         path_id = self._get_path_hash(file_path)
         try:
             return b"".join(self._all_page_generator(worker_host, path_id))
         except Exception as e:
-            raise type(e)(
+            raise Exception(
                 f"Error when reading file {file_path}: error {e}"
             ) from e
 
@@ -183,6 +186,13 @@ class AlluxioFileSystem:
         Returns:
             file content (str): The file content with length from offset
         """
+        self._validate_path(file_path)
+        if not isinstance(offset, int) or offset < 0:
+            raise ValueError("Offset must be a non-negative integer")
+
+        if not isinstance(length, int) or (length <= 0 and length != -1):
+            raise ValueError("Length must be a positive integer or -1")
+
         worker_host = self._get_preferred_worker_host(file_path)
         path_id = self._get_path_hash(file_path)
         try:
@@ -192,7 +202,7 @@ class AlluxioFileSystem:
                 )
             )
         except Exception as e:
-            raise type(e)(
+            raise Exception(
                 f"Error when reading file {file_path}: error {e}"
             ) from e
 
@@ -209,11 +219,16 @@ class AlluxioFileSystem:
 
     def _range_page_generator(self, worker_host, path_id, offset, length):
         start_page_index = offset // self.page_size
-        end_page_index = (offset + length - 1) // self.page_size
         start_page_offset = offset % self.page_size
-        end_page_read_to = ((offset + length - 1) % self.page_size) + 1
+        
+        if length == -1:
+            end_page_index = None
+        else:
+            end_page_index = (offset + length - 1) // self.page_size
+            end_page_read_to = ((offset + length - 1) % self.page_size) + 1
 
-        for page_index in range(start_page_index, end_page_index + 1):
+        page_index = start_page_index
+        while True:
             page_content = self._read_page(worker_host, path_id, page_index)
             if page_index == start_page_index:
                 if start_page_index == end_page_index:
@@ -230,6 +245,7 @@ class AlluxioFileSystem:
                 break
 
             yield page_content
+            page_index += 1
 
     def _create_session(self, concurrency):
         session = requests.Session()
@@ -252,7 +268,7 @@ class AlluxioFileSystem:
             response.raise_for_status()
             return response.content
         except Exception as e:
-            raise type(e)(
+            raise Exception(
                 f"Error when requesting file {path_id} page {page_index} from {worker_host}: error {e}"
             ) from e
 
@@ -279,3 +295,10 @@ class AlluxioFileSystem:
                 )
             )
         return workers[0].host
+
+    def _validate_path(self, path):
+        if not isinstance(path, str):
+            raise TypeError("path must be a string")
+
+        if not re.search(r'^[a-zA-Z0-9]+://', path):
+            raise ValueError("path must be a full path with a protocol (e.g., 'protocol://path')")
