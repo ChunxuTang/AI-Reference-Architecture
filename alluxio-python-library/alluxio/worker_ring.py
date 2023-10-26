@@ -138,8 +138,9 @@ class EtcdClient:
         """
         # Note that EtcdClient should not be passed through python multiprocessing
         etcd = self._get_etcd_client()
+        worker_addresses = None
         try:
-            return [
+            worker_addresses = [
                 WorkerNetAddress.from_worker_info(worker_info)
                 for worker_info, _ in etcd.get_prefix(self.PREFIX)
             ]
@@ -147,6 +148,13 @@ class EtcdClient:
             raise Exception(
                 f"Failed to achieve worker info list from ETCD server {self.host}:{self.port} {e}"
             ) from e
+
+        if not worker_addresses:
+            # TODO(lu) deal with the alluxio cluster initalizing issue
+            raise Exception(
+                "Alluxio cluster may still be initializing. No worker registered"
+            )
+        return worker_addresses
 
     def _get_etcd_client(self):
         if self.etcd_username:
@@ -167,7 +175,7 @@ class ConsistentHashProvider:
         num_virtual_nodes=2000,
         max_attempts=100,
     ):
-        if worker_addresses is None:
+        if not worker_addresses:
             raise ValueError(
                 "'worker_addresses' must be provided to form worker hash ring."
             )
