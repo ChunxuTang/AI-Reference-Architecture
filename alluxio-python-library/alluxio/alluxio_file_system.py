@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import re
+import time
 
 import humanfriendly
 import requests
@@ -27,6 +28,11 @@ class FileStatus:
         self.last_modification_time_ms = last_modification_time_ms
         self.human_readable_file_size = human_readable_file_size
         self.length = length
+
+class Progress(Enum):
+    ONGOING = 1
+    SUCCESS = 2
+    FAIL = 3
 
 class AlluxioFileSystem:
     """
@@ -60,6 +66,15 @@ class AlluxioFileSystem:
     )
     GET_FILE_STATUS_URL_FORMAT = (
         "http://{worker_host}:{http_port}/v1/info"
+    )
+    LOAD_SUBMIT_URL_FORMAT = (
+        "http://{worker_host}:{http_port}/v1/load?path={path}&opType=submit"
+    )
+    LOAD_PROGRESS_URL_FORMAT = (
+        "http://{worker_host}:{http_port}/v1/load?path={path}&opType=progress"
+    )
+    LOAD_STOP_URL_FORMAT = (
+        "http://{worker_host}:{http_port}/v1/load?path={path}&opType=stop"
     )
 
     def __init__(
@@ -241,6 +256,116 @@ class AlluxioFileSystem:
                 f"Error when getting file status path {path}: error {e}"
             ) from e
 
+    def load(
+        self,
+        file_path,
+        timeout=None,
+    ):
+        """
+        Loads a file.
+
+        Args:
+            file_path (str): The full ufs file path to load data from
+            timout (integer): The number of seconds for timeout
+
+        Returns:
+            result (boolean): Whether the file has been loaded successfully
+        """
+        worker_host = self._get_preferred_worker_host(file_path)
+        return self._load_file(worker_host, file_path, timeout)
+
+    def submit_load(
+        self,
+        file_path,
+    ):
+        """
+        Submits a load job for a file.
+
+        Args:
+            file_path (str): The full ufs file path to load data from
+
+        Returns:
+            result (boolean): Whether the job has been submitted successfully
+        """
+        worker_host = self._get_preferred_worker_host(file_path)
+        try:
+            response = self.session.get(
+                self.LOAD_SUBMIT_URL_FORMAT.format(
+                    worker_host=worker_host,
+                    http_port=self.http_port,
+                    path=file_path,
+                ),
+            )
+            response.raise_for_status()
+            return b"successfully" in response.content
+        except Exception as e:
+            raise Exception(
+                f"Error when submitting load job for path {file_path} from {worker_host}: error {e}"
+            ) from e
+
+    def stop_load(
+        self,
+        file_path,
+    ):
+        """
+        Stops a load job for a file.
+
+        Args:
+            file_path (str): The full ufs file path to load data from
+
+        Returns:
+            result (boolean): Whether the job has been stopped successfully
+        """
+        worker_host = self._get_preferred_worker_host(file_path)
+        try:
+            response = self.session.get(
+                self.LOAD_STOP_URL_FORMAT.format(
+                    worker_host=worker_host,
+                    http_port=self.http_port,
+                    path=file_path,
+                ),
+            )
+            response.raise_for_status()
+            return b"successfully" in response.content
+        except Exception as e:
+            raise Exception(
+                f"Error when stopping load job for path {file_path} from {worker_host}: error {e}"
+            ) from e
+
+    def load_progress(
+        self,
+        file_path,
+    ):
+        """
+        Gets the progress of the load job for a file.
+
+        Args:
+            file_path (str): The full ufs file path to load data from
+
+        Returns:
+            progress (Progress): The progress of the load job
+        """
+        worker_host = self._get_preferred_worker_host(file_path)
+        try:
+            response = self.session.get(
+                self.LOAD_PROGRESS_URL_FORMAT.format(
+                    worker_host=worker_host,
+                    http_port=self.http_port,
+                    path=file_path,
+                ),
+            )
+            response.raise_for_status()
+            progress_str = response.content.decode("utf-8")
+            if 'RUNNING' in progress_str:
+                return Progress.ONGOING
+            if 'SUCCEEDED' in progress_str:
+                return Progress.SUCCESS
+            return Progress.FAIL
+        except Exception as e:
+            raise Exception(
+                f"Error when getting load job progress for path {file_path} from {worker_host}: error {e}"
+            ) from e
+
     def read(self, file_path):
         """
         Reads a file.
@@ -362,6 +487,46 @@ class AlluxioFileSystem:
         )
         session.mount("http://", adapter)
         return session
+
+    def _load_file(self, worker_host, path, timeout):
+        try:
+            response = self.session.get(
+                self.LOAD_SUBMIT_URL_FORMAT.format(
+                    worker_host=worker_host,
+                    http_port=self.http_port,
+                    path=path,
+                ),
+            )
+            response.raise_for_status()
+            currentTime = time.time()
+            stopTime = 0
+            if timeout is not None:
+                stopTime = currentTime + timeout
+            while timeout is None or time.time() <= stopTime:
+                response = self.session.get(
+                    self.LOAD_PROGRESS_URL_FORMAT.format(
+                        worker_host=worker_host,
+                        http_port=self.http_port,
+                        path=path,
+                    ),
+                )
+                response.raise_for_status()
+                content = response.content
+                if b"SUCCEEDED" in content:
+                    logging.info(content.decode("utf-8"))
+                    return True
+                if b"FAILED" in content:
+                    raise Exception(f"{content}")
+                if timeout is None or stopTime - time.time() >= 10:
+                    time.sleep(10)
+                else:
+                    if timeout is not None:
+                        time.sleep(stopTime - time.time())
+            raise Exception(f"Load timeout!")
+        except Exception as e:
+            raise Exception(
+                f"Error when loading file {path} from {worker_host}: error {e}"
+            ) from e
 
     def _read_page(self, worker_host, path_id, page_index):
         try:
