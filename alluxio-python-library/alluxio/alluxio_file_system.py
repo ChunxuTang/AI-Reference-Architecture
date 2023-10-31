@@ -152,7 +152,9 @@ class AlluxioFileSystem:
             response.raise_for_status()
             return json.loads(response.content)
         except Exception as e:
-            raise Exception(f"Error when listing path {path}: error {e}") from e
+            raise Exception(
+                f"Error when listing path {path}: error {e}"
+            ) from e
 
     def read(self, file_path):
         """
@@ -209,7 +211,18 @@ class AlluxioFileSystem:
     def _all_page_generator(self, worker_host, path_id):
         page_index = 0
         while True:
-            page_content = self._read_page(worker_host, path_id, page_index)
+            try:
+                page_content = self._read_page(
+                    worker_host, path_id, page_index
+                )
+            except Exception as e:
+                if page_index == 0:
+                    raise Exception(
+                        f"Error when reading page 0 of {file_path}: error {e}"
+                    ) from e
+                else:
+                    # TODO(lu) distinguish end of file exception and real exception
+                    break
             if not page_content:
                 break
             yield page_content
@@ -220,7 +233,7 @@ class AlluxioFileSystem:
     def _range_page_generator(self, worker_host, path_id, offset, length):
         start_page_index = offset // self.page_size
         start_page_offset = offset % self.page_size
-        
+
         if length == -1:
             end_page_index = None
         else:
@@ -229,12 +242,22 @@ class AlluxioFileSystem:
 
         page_index = start_page_index
         while True:
-            page_content = self._read_page(worker_host, path_id, page_index)
+            try:
+                page_content = self._read_page(
+                    worker_host, path_id, page_index
+                )
+            except Exception as e:
+                if page_index == start_page_index:
+                    raise Exception(
+                        f"Error when reading page {page_index} of {file_path}: error {e}"
+                    ) from e
+                else:
+                    # TODO(lu) distinguish end of file exception and real exception
+                    break
             if page_index == start_page_index:
                 if start_page_index == end_page_index:
-                    page_content = page_content[
-                        start_page_offset:end_page_read_to
-                    ]
+                    yield page_content[start_page_offset:end_page_read_to]
+                    break
                 else:
                     page_content = page_content[start_page_offset:]
             elif page_index == end_page_index:
@@ -300,5 +323,7 @@ class AlluxioFileSystem:
         if not isinstance(path, str):
             raise TypeError("path must be a string")
 
-        if not re.search(r'^[a-zA-Z0-9]+://', path):
-            raise ValueError("path must be a full path with a protocol (e.g., 'protocol://path')")
+        if not re.search(r"^[a-zA-Z0-9]+://", path):
+            raise ValueError(
+                "path must be a full path with a protocol (e.g., 'protocol://path')"
+            )
