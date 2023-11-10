@@ -18,6 +18,15 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 
+class FileStatus:
+    def __init__(self, type, name, path, ufs_path, last_modification_time_ms, human_readable_file_size, length):
+        self.type = type
+        self.name = name
+        self.path = path
+        self.ufs_path = ufs_path
+        self.last_modification_time_ms = last_modification_time_ms
+        self.human_readable_file_size = human_readable_file_size
+        self.length = length
 
 class AlluxioFileSystem:
     """
@@ -48,6 +57,9 @@ class AlluxioFileSystem:
     LIST_URL_FORMAT = "http://{worker_host}:{http_port}/v1/files"
     PAGE_URL_FORMAT = (
         "http://{worker_host}:{http_port}/v1/file/{path_id}/page/{page_index}"
+    )
+    GET_FILE_STATUS_URL_FORMAT = (
+        "http://{worker_host}:{http_port}/v1/info"
     )
 
     def __init__(
@@ -126,20 +138,27 @@ class AlluxioFileSystem:
         Example:
             [
                 {
-                    "mType": "file",
-                    "mName": "my_file_name",
-                    "mLength": 77542
+                    type: "file",
+                    name: "my_file_name",
+                    path: '/my_file_name',
+                    ufs_path: 's3://example-bucket/my_file_name',
+                    last_modification_time_ms: 0,
+                    length: 77542,
+                    human_readable_file_size: '75.72KB'
                 },
                 {
-                    "mType": "directory",
-                    "mName": "my_dir_name",
-                    "mLength": 0
+                    type: "directory",
+                    name: "my_dir_name",
+                    path: '/my_dir_name',
+                    ufs_path: 's3://example-bucket/my_dir_name',
+                    last_modification_time_ms: 0,
+                    length: 0,
+                    human_readable_file_size: '0B'
                 },
 
             ]
         """
         self._validate_path(path)
-        path_id = self._get_path_hash(path)
         worker_host = self._get_preferred_worker_host(path)
         params = {"path": path}
         try:
@@ -150,10 +169,76 @@ class AlluxioFileSystem:
                 params=params,
             )
             response.raise_for_status()
-            return json.loads(response.content)
+            result = []
+            for data in json.loads(response.content):
+                result.append(FileStatus(
+                    data['mType'],
+                    data['mName'],
+                    data['mPath'],
+                    data['mUfsPath'],
+                    data['mLastModificationTimeMs'],
+                    data['mHumanReadableFileSize'],
+                    data['mLength']
+                ))
+            return result
         except Exception as e:
             raise Exception(
                 f"Error when listing path {path}: error {e}"
+            ) from e
+
+    def get_file_status(self, path):
+        """
+        Gets the file status of the path.
+
+        Args:
+            path (str): The full ufs path to get the file status of
+
+        Returns:
+            File Status: The struct has:
+                - type (string): directory or file
+                - name (string): name of the directory/file
+                - path (string): the path of the file
+                - ufs_path (string): the ufs path of the file
+                - last_modification_time_ms (long): the last modification time
+                - length (integer): length of the file or 0 for directory
+                - human_readable_file_size (string): the size of the human readable files
+
+        Example:
+            {
+                type: 'directory',
+                name: 'a',
+                path: '/a',
+                ufs_path: 's3://example-bucket/a',
+                last_modification_time_ms: 0,
+                length: 0,
+                human_readable_file_size: '0B'
+            }
+        """
+        self._validate_path(path)
+        worker_host = self._get_preferred_worker_host(path)
+        params = {"path": path}
+        try:
+            response = self.session.get(
+                self.GET_FILE_STATUS_URL_FORMAT.format(
+                    worker_host=worker_host,
+                    http_port=self.http_port,
+                ),
+                params=params,
+            )
+            response.raise_for_status()
+            data = json.loads(response.content)[0]
+            return FileStatus(
+                data['mType'],
+                data['mName'],
+                data['mPath'],
+                data['mUfsPath'],
+                data['mLastModificationTimeMs'],
+                data['mHumanReadableFileSize'],
+                data['mLength']
+            )
+        except Exception as e:
+            raise Exception(
+                f"Error when getting file status path {path}: error {e}"
             ) from e
 
     def read(self, file_path):
