@@ -218,7 +218,7 @@ class AlluxioFileSystem:
             except Exception as e:
                 if page_index == 0:
                     raise Exception(
-                        f"Error when reading page 0 of {file_path}: error {e}"
+                        f"Error when reading page 0 of {path_id}: error {e}"
                     ) from e
                 else:
                     # TODO(lu) distinguish end of file exception and real exception
@@ -249,7 +249,7 @@ class AlluxioFileSystem:
             except Exception as e:
                 if page_index == start_page_index:
                     raise Exception(
-                        f"Error when reading page {page_index} of {file_path}: error {e}"
+                        f"Error when reading page {page_index} of {path_id}: error {e}"
                     ) from e
                 else:
                     # TODO(lu) distinguish end of file exception and real exception
