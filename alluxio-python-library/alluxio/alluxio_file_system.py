@@ -9,6 +9,7 @@ import time
 import humanfriendly
 import requests
 from requests.adapters import HTTPAdapter
+from enum import Enum
 
 from .worker_ring import ConsistentHashProvider
 from .worker_ring import EtcdClient
