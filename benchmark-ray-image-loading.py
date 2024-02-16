@@ -55,8 +55,15 @@ class BenchmarkImageLoadingRunner:
         fsspec.register_implementation(
             "alluxio", core.AlluxioFileSystem, clobber=True
         )
+        options = {
+            "alluxio.worker.page.store.page.size": "20MB",
+            "alluxio.user.consistent.hash.virtual.node.count.per.worker": "5",
+        }
         self.alluxio_fsspec = fsspec.filesystem(
-            "alluxio", etcd_hosts=etcd_hosts, etcd_port=etcd_port
+            "alluxio",
+            etcd_hosts=etcd_hosts,
+            etcd_port=etcd_port,
+            options=options,
         )
 
     def load_dataset(self):
